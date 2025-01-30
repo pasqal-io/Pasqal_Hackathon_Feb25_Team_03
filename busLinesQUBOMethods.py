@@ -8,6 +8,7 @@ from dadk.QUBOSolverCPU import *
 import matplotlib.pyplot as plt
 import networkx as nx
 from random import random
+from typing import List
 
 def create_complete_graph(N: int, seed: int, zeroSelfDistance: bool = True):
     np.random.seed(seed)
@@ -53,7 +54,7 @@ def draw_graph(G):
 
 
 # Crear el QUBO para el problema de autobuses
-def build_qubo(graph, distances, N, L, A, B):
+def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
     var_shape_set = VarShapeSet(BitArrayShape('x', (N, N, L)))
     BinPol.freeze_var_shape_set(var_shape_set)
 
@@ -64,8 +65,9 @@ def build_qubo(graph, distances, N, L, A, B):
             for l in range(L):
                 H_distances.add_term(distances[i, j], ('x', i, j, l))
 
+    H_constraints = []
     # Restricciones:
-    # 1. \sum_{l=0}^{L-1}\sum_{i=0}^{N-1} x_{ij}^{l} \geq 1 \forall j
+    # 1. \sum_{l=0}^{L-1}\sum_{i=0}^{N-1} x_{ij}^{l} \geq 1 \forall j (toda parada tien al menos una salida)
     H_constraints_1 = BinPol()
     for j in range(N):
         aux = BinPol()
@@ -76,7 +78,9 @@ def build_qubo(graph, distances, N, L, A, B):
         aux.power(2)
         H_constraints_1.add(aux)
 
-    # 2. \sum_{l=0}^{L-1}\sum_{j=0}^{N-1} x_{ij}^{l} \geq 1 \forall i
+    H_constraints.append(H_constraints_1)
+
+    # 2. \sum_{l=0}^{L-1}\sum_{j=0}^{N-1} x_{ij}^{l} \geq 1 \forall i (toda parada tiene al menos una entrada)
     H_constraints_2 = BinPol()
     for i in range(N):
         aux = BinPol()
@@ -87,7 +91,9 @@ def build_qubo(graph, distances, N, L, A, B):
         aux.power(2)
         H_constraints_2.add(aux)
 
-    # 3. x_{ii}^{l} = 0 \forall i, l
+    H_constraints.append(H_constraints_2)
+
+    # 3. x_{ii}^{l} = 0 \forall i, l (una parada no puede ir a sí misma)
     H_constraints_3 = BinPol()
     for l in range(L):
         for i in range(N):
@@ -95,7 +101,9 @@ def build_qubo(graph, distances, N, L, A, B):
             aux.add_term(1, ('x', i, i, l))
             H_constraints_3.add(aux.power(2))
 
-    # 4. if x_{ij}^{l} = 1 then \sum_{k=0}^{N-1} x_{jk}^{l} = 1 \forall i, j, l
+    H_constraints.append(H_constraints_3)
+
+    # 4. if x_{ij}^{l} = 1 then \sum_{k=0}^{N-1} x_{jk}^{l} = 1 \forall i, j, l (si una linea llega a j, tiene que salir de j)
     H_constraints_4 = BinPol()
     for l in range(L):
         for i in range(N):
@@ -106,7 +114,9 @@ def build_qubo(graph, distances, N, L, A, B):
                     aux.add_term(-1, ('x', j, k, l))  # -sum_k x_{jk}^l
                 H_constraints_4.add(aux.power(2))  # Penalización cuadrática
 
-    # 5. Cada linea debe ser cerrada y cubrir todos los nodos
+    H_constraints.append(H_constraints_4)
+
+    # 5. Cada linea debe ser cerrada y cubrir todos los nodos entre todas las paradas
 
     H_constraints_5_closed = BinPol()
     for l in range(L):
@@ -128,35 +138,43 @@ def build_qubo(graph, distances, N, L, A, B):
 
     H_constraints_5 = H_constraints_5_closed + H_constraints_5_cover
 
+    H_constraints.append(H_constraints_5)
+
 
     # 6. Debe existir al menos un camino cerrado que pase por todos los nodos
 
-    H_combined_adjacency = BinPol()
-    aux = BinPol()
+    # Garantizar que el grafo resultante sea completamente conexo
+    H_connectivity_strict = BinPol()
     for i in range(N):
         for j in range(N):
+            aux = BinPol()
             for l in range(L):
-                aux.add_term(1, ('x', i, j, l))  # Suma sobre todas las líneas
-    aux.add_term(-N, ())  # Garantizar que la suma total sea igual a N
-    H_combined_adjacency.add(aux.power(2))  # Penalización cuadrática
-
-    H_connectivity = BinPol()
+                aux.add_term(1, ('x', i, j, l))
+            aux.add_term(-1, ())  # Asegurar que cada nodo tenga al menos una conexión
+            H_connectivity_strict.add(aux.power(2))
+    
+    # Asegurar que cada nodo esté en un ciclo accesible
+    H_cycles = BinPol()
     for i in range(N):
         aux = BinPol()
         for j in range(N):
             for l in range(L):
-                aux.add_term(1, ('x', i, j, l))  # Salidas desde i
-                aux.add_term(-1, ('x', j, i, l))  # Entradas hacia i
-        H_connectivity.add(aux.power(2))  # Penalización cuadrática para balance
+                aux.add_term(1, ('x', i, j, l))
+                aux.add_term(-1, ('x', j, i, l))  # Balance entre entrada y salida
+        H_cycles.add(aux.power(2))
+
+    # Agregar las nuevas restricciones con una penalización más alta
+    H_constraints_6 = (H_connectivity_strict + H_cycles)
+
+    H_constraints.append(H_constraints_6)
 
 
-    H_constraints_6 = 5*(H_combined_adjacency + H_connectivity)
 
-
-
-    H_constraints = H_constraints_1 + H_constraints_2 + H_constraints_3 + H_constraints_4 + H_constraints_5 + H_constraints_6
-    HQ = A * H_distances + B * H_constraints
-    return H_distances, H_constraints, HQ
+    H_constraints_sum = 0
+    for i in range(len(H_constraints)):
+        H_constraints_sum += B[i]*H_constraints[i]
+    HQ = A * H_distances + H_constraints_sum
+    return H_distances, H_constraints_sum, HQ
 
 # Procesar la solución QUBO
 def prep_bus_solution(HQ, H_distances, H_constraints, solution_list, N, L):
@@ -178,14 +196,25 @@ def prep_bus_solution(HQ, H_distances, H_constraints, solution_list, N, L):
 
     return active_edges, colors
 
-# Reporte de resultados
 def report_bus_solution(N, L, graph, active_edges):
+    """
+    Reporta la solución obtenida e indica si el grafo es factible o qué restricción falla.
+    
+    Parámetros:
+        N (int): Número de nodos.
+        L (int): Número de líneas de autobuses.
+        graph (networkx.DiGraph): Grafo original con pesos en las aristas.
+        active_edges (list): Lista de aristas activas en la solución obtenida [(i, j, l)].
+    """
+    is_feasible, message = check_graph_feasibility(N, L, graph, active_edges)
+
     print(("Number of nodes:       {0:5d}\n" +
            "Number of lines:       {1:5d}\n" +
            "Number of edges:       {2:5d}\n" +
            "Active edges:          {3:5d}\n" +
-           "Active edges details:  {4:s}\n"
-          ).format(N, L, len(graph.edges), len(active_edges), str(active_edges)))
+           "Active edges details:  {4:s}\n" +
+           "Feasibility Check:     {5:s}\n"
+          ).format(N, L, len(graph.edges), len(active_edges), str(active_edges), message))
 
 # Dibujar el grafo con líneas activas
 def draw_bus_graph(graph, active_edges, colors):
@@ -203,3 +232,70 @@ def draw_bus_graph(graph, active_edges, colors):
     nx.draw_networkx_edge_labels(subgraph, pos, edge_labels=edge_labels, font_color='black')
     plt.title("Grafo con líneas de autobús activas")
     plt.show()
+
+def check_graph_feasibility(N, L, graph, active_edges):
+    """
+    Verifica si la solución obtenida cumple con todas las restricciones definidas en build_qubo.
+    
+    Parámetros:
+        N (int): Número de nodos.
+        L (int): Número de líneas de autobuses.
+        graph (networkx.DiGraph): Grafo original con pesos en las aristas.
+        active_edges (list): Lista de aristas activas en la solución obtenida [(i, j, l)].
+    
+    Retorna:
+        (bool, str): Un booleano indicando si la solución es válida y un mensaje de error si no lo es.
+    """
+    subgraph = nx.DiGraph()
+    subgraph.add_edges_from([(i, j) for i, j, l in active_edges])
+    
+    # 1. Verificar que cada nodo tenga al menos una salida
+    for j in range(N):
+        if not any(j == i for i, _, _ in active_edges):
+            return False, f"Error: La parada {j} no tiene ninguna salida."
+
+    # 2. Verificar que cada nodo tenga al menos una entrada
+    for i in range(N):
+        if not any(i == j for _, j, _ in active_edges):
+            return False, f"Error: La parada {i} no tiene ninguna entrada."
+
+    # 3. Verificar que no existan auto-bucles (x_{ii}^{l} = 0)
+    for i, j, _ in active_edges:
+        if i == j:
+            return False, f"Error: Se encontró un auto-bucle en la parada {i}."
+
+    # 4. Si un nodo tiene una entrada en una línea, debe tener una salida en esa línea
+    for l in range(L):
+        for j in range(N):
+            incoming = [(i, j, l) for i in range(N) if (i, j, l) in active_edges]
+            outgoing = [(j, k, l) for k in range(N) if (j, k, l) in active_edges]
+            if incoming and not outgoing:
+                return False, f"Error: Nodo {j} recibe un autobús en la línea {l} pero no tiene salida."
+            if outgoing and not incoming:
+                return False, f"Error: Nodo {j} tiene salida en la línea {l} pero no recibe ningún autobús."
+
+    # 5. Verificar que el grafo resultante sea fuertemente conexo
+    if not nx.is_strongly_connected(subgraph):
+        return False, "Error: El grafo resultante no es fuertemente conexo."
+
+    # 6. Verificar que cada línea individualmente sea fuertemente conexa en su subgrafo
+    for l in range(L):
+        line_subgraph = nx.DiGraph()
+        line_edges = [(i, j) for i, j, l_aux in active_edges if l_aux == l]
+        line_subgraph.add_edges_from(line_edges)
+
+        # Si la línea no tiene aristas activas, es inválida
+        if len(line_edges) == 0:
+            return False, f"Error: La línea {l} no tiene ninguna arista activa."
+
+        # Extraer los nodos que realmente están en la línea
+        line_nodes = set(i for i, j in line_edges) | set(j for i, j in line_edges)
+
+        # Crear subgrafo restringido solo a los nodos que aparecen en la línea
+        restricted_subgraph = line_subgraph.subgraph(line_nodes)
+
+        # Verificar que el subgrafo de la línea sea fuertemente conexo
+        if not nx.is_strongly_connected(restricted_subgraph):
+            return False, f"Error: La línea {l} no es fuertemente conexa dentro de sus paradas."
+
+    return True, "La solución cumple con todas las restricciones."
