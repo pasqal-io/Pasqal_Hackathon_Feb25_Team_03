@@ -1,4 +1,5 @@
 from IPython.display import display, HTML
+
 display(HTML("<style>.container{width:100% !important;}</style>"))
 from random import uniform, seed
 from tabulate import tabulate
@@ -10,52 +11,76 @@ import networkx as nx
 from random import random
 from typing import List
 
+
 def create_complete_graph(N: int, seed: int, zeroSelfDistance: bool = True):
     np.random.seed(seed)
-    
+
     # Crear una matriz de distancias aleatorias (valores entre 1 y 10)
     distances = np.random.uniform(1, 10, size=(N, N))
-    
+
     if zeroSelfDistance:
         np.fill_diagonal(distances, 0)  # Distancia cero para x_{ii}
     else:
         max_distance = distances.max()
         np.fill_diagonal(distances, max_distance)  # Distancia máxima para x_{ii}
-    
+
     # Crear un grafo dirigido y asignar las distancias como pesos
     G = nx.DiGraph()
     G.add_nodes_from(range(N))
     for i in range(N):
         for j in range(N):
-            if i != j or not zeroSelfDistance:  # Añadir aristas (i, i) si zeroSelfDistance es False
-                G.add_edge(i, j, weight=round(distances[i, j], 2))  # Redondear a 2 decimales
-    
+            if (
+                i != j or not zeroSelfDistance
+            ):  # Añadir aristas (i, i) si zeroSelfDistance es False
+                G.add_edge(
+                    i, j, weight=round(distances[i, j], 2)
+                )  # Redondear a 2 decimales
+
     return G, distances
 
+
 def draw_graph(G):
-    pos = nx.spring_layout(G, seed=42)  # Posiciones de los nodos con un seed para reproducibilidad
+    pos = nx.spring_layout(
+        G, seed=42
+    )  # Posiciones de los nodos con un seed para reproducibilidad
     plt.figure(figsize=(10, 8))
-    
+
     # Dibujar nodos
-    nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=700)
-    nx.draw_networkx_labels(G, pos, font_size=12, font_weight='bold')
+    nx.draw_networkx_nodes(G, pos, node_color="lightblue", node_size=700)
+    nx.draw_networkx_labels(G, pos, font_size=12, font_weight="bold")
 
     # Dibujar aristas con etiquetas
     curved_edges = [(u, v) for u, v in G.edges()]
-    nx.draw_networkx_edges(G, pos, edgelist=curved_edges, connectionstyle="arc3,rad=0.2", arrowsize=15, edge_color='black')
+    nx.draw_networkx_edges(
+        G,
+        pos,
+        edgelist=curved_edges,
+        connectionstyle="arc3,rad=0.2",
+        arrowsize=15,
+        edge_color="black",
+    )
 
     # Dibujar etiquetas de los pesos de las aristas más cerca de las aristas
-    edge_labels = nx.get_edge_attributes(G, 'weight')
-    formatted_labels = {edge: f"{weight:.2f}" for edge, weight in edge_labels.items()}  # Formatear los pesos
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=formatted_labels, font_color='red', font_size=10, label_pos=0.6)
-    
+    edge_labels = nx.get_edge_attributes(G, "weight")
+    formatted_labels = {
+        edge: f"{weight:.2f}" for edge, weight in edge_labels.items()
+    }  # Formatear los pesos
+    nx.draw_networkx_edge_labels(
+        G,
+        pos,
+        edge_labels=formatted_labels,
+        font_color="red",
+        font_size=10,
+        label_pos=0.6,
+    )
+
     plt.title("Grafo Completo Dirigido con Pesos", fontsize=14)
     plt.show()
 
 
 # Crear el QUBO para el problema de autobuses
 def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
-    var_shape_set = VarShapeSet(BitArrayShape('x', (N, N, L)))
+    var_shape_set = VarShapeSet(BitArrayShape("x", (N, N, L)))
     BinPol.freeze_var_shape_set(var_shape_set)
 
     # Función objetivo: minimizar distancias
@@ -63,7 +88,7 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
     for i in range(N):
         for j in range(N):
             for l in range(L):
-                H_distances.add_term(distances[i, j], ('x', i, j, l))
+                H_distances.add_term(distances[i, j], ("x", i, j, l))
 
     H_constraints = []
     # Restricciones:
@@ -73,7 +98,7 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
         aux = BinPol()
         for l in range(L):
             for i in range(N):
-                aux.add_term(-1, ('x', i, j, l))
+                aux.add_term(-1, ("x", i, j, l))
         aux.add_term(1, ())
         aux.power(2)
         H_constraints_1.add(aux)
@@ -86,7 +111,7 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
         aux = BinPol()
         for l in range(L):
             for j in range(N):
-                aux.add_term(-1, ('x', i, j, l))
+                aux.add_term(-1, ("x", i, j, l))
         aux.add_term(1, ())
         aux.power(2)
         H_constraints_2.add(aux)
@@ -98,7 +123,7 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
     for l in range(L):
         for i in range(N):
             aux = BinPol()
-            aux.add_term(1, ('x', i, i, l))
+            aux.add_term(1, ("x", i, i, l))
             H_constraints_3.add(aux.power(2))
 
     H_constraints.append(H_constraints_3)
@@ -109,9 +134,9 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
         for i in range(N):
             for j in range(N):
                 aux = BinPol()
-                aux.add_term(1, ('x', i, j, l))  # x_{ij}^l
+                aux.add_term(1, ("x", i, j, l))  # x_{ij}^l
                 for k in range(N):
-                    aux.add_term(-1, ('x', j, k, l))  # -sum_k x_{jk}^l
+                    aux.add_term(-1, ("x", j, k, l))  # -sum_k x_{jk}^l
                 H_constraints_4.add(aux.power(2))  # Penalización cuadrática
 
     H_constraints.append(H_constraints_4)
@@ -123,7 +148,7 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
         aux = BinPol()
         for i in range(N):
             for j in range(N):
-                aux.add_term(1, ('x', i, j, l))  # Contar aristas activas
+                aux.add_term(1, ("x", i, j, l))  # Contar aristas activas
         aux.add_term(-N, ())  # Penalización para ciclos abiertos
         H_constraints_5_closed.add(aux.power(2))
 
@@ -132,14 +157,15 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
         aux = BinPol()
         for l in range(L):
             for i in range(N):
-                aux.add_term(-1, ('x', i, j, l))  # Garantizar al menos una visita por línea
+                aux.add_term(
+                    -1, ("x", i, j, l)
+                )  # Garantizar al menos una visita por línea
         aux.add_term(1, ())
         H_constraints_5_cover.add(aux.power(2))
 
     H_constraints_5 = H_constraints_5_closed + H_constraints_5_cover
 
     H_constraints.append(H_constraints_5)
-
 
     # 6. Debe existir al menos un camino cerrado que pase por todos los nodos
 
@@ -149,37 +175,36 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
         for j in range(N):
             aux = BinPol()
             for l in range(L):
-                aux.add_term(1, ('x', i, j, l))
+                aux.add_term(1, ("x", i, j, l))
             aux.add_term(-1, ())  # Asegurar que cada nodo tenga al menos una conexión
             H_connectivity_strict.add(aux.power(2))
-    
+
     # Asegurar que cada nodo esté en un ciclo accesible
     H_cycles = BinPol()
     for i in range(N):
         aux = BinPol()
         for j in range(N):
             for l in range(L):
-                aux.add_term(1, ('x', i, j, l))
-                aux.add_term(-1, ('x', j, i, l))  # Balance entre entrada y salida
+                aux.add_term(1, ("x", i, j, l))
+                aux.add_term(-1, ("x", j, i, l))  # Balance entre entrada y salida
         H_cycles.add(aux.power(2))
 
     # Agregar las nuevas restricciones con una penalización más alta
-    H_constraints_6 = (H_connectivity_strict + H_cycles)
+    H_constraints_6 = H_connectivity_strict + H_cycles
 
     H_constraints.append(H_constraints_6)
 
-
-
     H_constraints_sum = 0
     for i in range(len(H_constraints)):
-        H_constraints_sum += B[i]*H_constraints[i]
+        H_constraints_sum += B[i] * H_constraints[i]
     HQ = A * H_distances + H_constraints_sum
     return H_distances, H_constraints_sum, HQ
+
 
 # Procesar la solución QUBO
 def prep_bus_solution(HQ, H_distances, H_constraints, solution_list, N, L):
     solution = solution_list.min_solution
-    edge_activations = solution['x'].data  # Variables binarias x_{ij}^l
+    edge_activations = solution["x"].data  # Variables binarias x_{ij}^l
 
     colors = [(random(), random(), random()) for _ in range(L)]
     active_edges = []
@@ -196,10 +221,11 @@ def prep_bus_solution(HQ, H_distances, H_constraints, solution_list, N, L):
 
     return active_edges, colors
 
+
 def report_bus_solution(N, L, graph, active_edges):
     """
     Reporta la solución obtenida e indica si el grafo es factible o qué restricción falla.
-    
+
     Parámetros:
         N (int): Número de nodos.
         L (int): Número de líneas de autobuses.
@@ -208,18 +234,22 @@ def report_bus_solution(N, L, graph, active_edges):
     """
     is_feasible, message = check_graph_feasibility(N, L, graph, active_edges)
 
-    print(("Number of nodes:       {0:5d}\n" +
-           "Number of lines:       {1:5d}\n" +
-           "Number of edges:       {2:5d}\n" +
-           "Active edges:          {3:5d}\n" +
-           "Active edges details:  {4:s}\n" +
-           "Feasibility Check:     {5:s}\n"
-          ).format(N, L, len(graph.edges), len(active_edges), str(active_edges), message))
+    print(
+        (
+            "Number of nodes:       {0:5d}\n"
+            + "Number of lines:       {1:5d}\n"
+            + "Number of edges:       {2:5d}\n"
+            + "Active edges:          {3:5d}\n"
+            + "Active edges details:  {4:s}\n"
+            + "Feasibility Check:     {5:s}\n"
+        ).format(N, L, len(graph.edges), len(active_edges), str(active_edges), message)
+    )
+
 
 def draw_bus_graph(graph, active_edges, colors, distances):
     """
     Dibuja el grafo de autobuses con las líneas activas, posicionando las paradas más cercanas según distances.
-    
+
     Parámetros:
         graph (networkx.DiGraph): Grafo original con todas las conexiones.
         active_edges (list): Lista de aristas activas en la solución [(i, j, l)].
@@ -227,45 +257,61 @@ def draw_bus_graph(graph, active_edges, colors, distances):
         distances (np.array): Matriz NxN con las distancias entre paradas.
     """
     subgraph = nx.DiGraph()
-    
+
     # Agregar aristas activas al subgrafo con pesos según distances[i, j]
     for i, j, l in active_edges:
         if graph.has_edge(i, j):
-            subgraph.add_edge(i, j, color=colors[l], label=f"Line {l}", weight=distances[i, j])
+            subgraph.add_edge(
+                i, j, color=colors[l], label=f"Line {l}", weight=distances[i, j]
+            )
 
     # Obtener colores de las aristas
-    edge_colors = [subgraph[u][v]['color'] for u, v in subgraph.edges]
-    edge_labels = nx.get_edge_attributes(subgraph, 'label')
+    edge_colors = [subgraph[u][v]["color"] for u, v in subgraph.edges]
+    edge_labels = nx.get_edge_attributes(subgraph, "label")
 
     # Generar posiciones según las distancias d_{ij}
     pos = nx.kamada_kawai_layout(subgraph, weight="weight")
 
     # Dibujar el grafo con las líneas activas
     plt.figure(figsize=(10, 8))
-    nx.draw(subgraph, pos, with_labels=True, node_color='lightblue', node_size=500, 
-            font_size=10, edge_color=edge_colors, arrows=True, arrowstyle='-|>', width=2)
-    nx.draw_networkx_edge_labels(subgraph, pos, edge_labels=edge_labels, font_color='black')
+    nx.draw(
+        subgraph,
+        pos,
+        with_labels=True,
+        node_color="lightblue",
+        node_size=500,
+        font_size=10,
+        edge_color=edge_colors,
+        arrows=True,
+        arrowstyle="-|>",
+        width=2,
+    )
+    nx.draw_networkx_edge_labels(
+        subgraph, pos, edge_labels=edge_labels, font_color="black"
+    )
 
-    plt.title("Grafo con líneas de autobús activas (Paradas más cercanas posicionadas juntas)")
+    plt.title(
+        "Grafo con líneas de autobús activas (Paradas más cercanas posicionadas juntas)"
+    )
     plt.show()
 
 
 def check_graph_feasibility(N, L, graph, active_edges):
     """
     Verifica si la solución obtenida cumple con todas las restricciones definidas en build_qubo.
-    
+
     Parámetros:
         N (int): Número de nodos.
         L (int): Número de líneas de autobuses.
         graph (networkx.DiGraph): Grafo original con pesos en las aristas.
         active_edges (list): Lista de aristas activas en la solución obtenida [(i, j, l)].
-    
+
     Retorna:
         (bool, str): Un booleano indicando si la solución es válida y un mensaje de error si no lo es.
     """
     subgraph = nx.DiGraph()
     subgraph.add_edges_from([(i, j) for i, j, l in active_edges])
-    
+
     # 1. Verificar que cada nodo tenga al menos una salida
     for j in range(N):
         if not any(j == i for i, _, _ in active_edges):
@@ -287,9 +333,15 @@ def check_graph_feasibility(N, L, graph, active_edges):
             incoming = [(i, j, l) for i in range(N) if (i, j, l) in active_edges]
             outgoing = [(j, k, l) for k in range(N) if (j, k, l) in active_edges]
             if incoming and not outgoing:
-                return False, f"Error: Nodo {j} recibe un autobús en la línea {l} pero no tiene salida."
+                return (
+                    False,
+                    f"Error: Nodo {j} recibe un autobús en la línea {l} pero no tiene salida.",
+                )
             if outgoing and not incoming:
-                return False, f"Error: Nodo {j} tiene salida en la línea {l} pero no recibe ningún autobús."
+                return (
+                    False,
+                    f"Error: Nodo {j} tiene salida en la línea {l} pero no recibe ningún autobús.",
+                )
 
     # 5. Verificar que el grafo resultante sea fuertemente conexo
     if not nx.is_strongly_connected(subgraph):
@@ -313,7 +365,10 @@ def check_graph_feasibility(N, L, graph, active_edges):
 
         # Verificar que el subgrafo de la línea sea fuertemente conexo
         if not nx.is_strongly_connected(restricted_subgraph):
-            return False, f"Error: La línea {l} no es fuertemente conexa dentro de sus paradas."
+            return (
+                False,
+                f"Error: La línea {l} no es fuertemente conexa dentro de sus paradas.",
+            )
 
     return True, "La solución cumple con todas las restricciones."
 
@@ -330,12 +385,11 @@ def average_distance_between_stops(distances, N):
         float: Distancia media entre pares de paradas.
     """
     pairwise_means = []
-    
+
     for i in range(N):
-        for j in range(i+1, N):  # Solo consideramos cada par una vez
+        for j in range(i + 1, N):  # Solo consideramos cada par una vez
             if i != j:
                 mean_distance = (distances[i, j] + distances[j, i]) / 2
                 pairwise_means.append(mean_distance)
 
     return np.mean(pairwise_means) if pairwise_means else 0.0  # Evitar divisiones por 0
-
