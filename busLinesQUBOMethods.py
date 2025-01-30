@@ -216,22 +216,39 @@ def report_bus_solution(N, L, graph, active_edges):
            "Feasibility Check:     {5:s}\n"
           ).format(N, L, len(graph.edges), len(active_edges), str(active_edges), message))
 
-# Dibujar el grafo con líneas activas
-def draw_bus_graph(graph, active_edges, colors):
+def draw_bus_graph(graph, active_edges, colors, distances):
+    """
+    Dibuja el grafo de autobuses con las líneas activas, posicionando las paradas más cercanas según distances.
+    
+    Parámetros:
+        graph (networkx.DiGraph): Grafo original con todas las conexiones.
+        active_edges (list): Lista de aristas activas en la solución [(i, j, l)].
+        colors (list): Lista de colores para cada línea.
+        distances (np.array): Matriz NxN con las distancias entre paradas.
+    """
     subgraph = nx.DiGraph()
+    
+    # Agregar aristas activas al subgrafo con pesos según distances[i, j]
     for i, j, l in active_edges:
         if graph.has_edge(i, j):
-            subgraph.add_edge(i, j, color=colors[l], label=f"Line {l}")
+            subgraph.add_edge(i, j, color=colors[l], label=f"Line {l}", weight=distances[i, j])
 
+    # Obtener colores de las aristas
     edge_colors = [subgraph[u][v]['color'] for u, v in subgraph.edges]
     edge_labels = nx.get_edge_attributes(subgraph, 'label')
 
-    pos = nx.spring_layout(graph)
+    # Generar posiciones según las distancias d_{ij}
+    pos = nx.kamada_kawai_layout(subgraph, weight="weight")
+
+    # Dibujar el grafo con las líneas activas
     plt.figure(figsize=(10, 8))
-    nx.draw(subgraph, pos, with_labels=True, node_color='lightblue', node_size=500, font_size=10, edge_color=edge_colors, arrows=True, arrowstyle='-|>', width=2)
+    nx.draw(subgraph, pos, with_labels=True, node_color='lightblue', node_size=500, 
+            font_size=10, edge_color=edge_colors, arrows=True, arrowstyle='-|>', width=2)
     nx.draw_networkx_edge_labels(subgraph, pos, edge_labels=edge_labels, font_color='black')
-    plt.title("Grafo con líneas de autobús activas")
+
+    plt.title("Grafo con líneas de autobús activas (Paradas más cercanas posicionadas juntas)")
     plt.show()
+
 
 def check_graph_feasibility(N, L, graph, active_edges):
     """
@@ -299,3 +316,26 @@ def check_graph_feasibility(N, L, graph, active_edges):
             return False, f"Error: La línea {l} no es fuertemente conexa dentro de sus paradas."
 
     return True, "La solución cumple con todas las restricciones."
+
+
+def average_distance_between_stops(distances, N):
+    """
+    Calcula la distancia media entre pares de paradas en un grafo dirigido.
+
+    Parámetros:
+        distances (np.array): Matriz NxN con las distancias entre paradas.
+        N (int): Número de paradas.
+
+    Retorna:
+        float: Distancia media entre pares de paradas.
+    """
+    pairwise_means = []
+    
+    for i in range(N):
+        for j in range(i+1, N):  # Solo consideramos cada par una vez
+            if i != j:
+                mean_distance = (distances[i, j] + distances[j, i]) / 2
+                pairwise_means.append(mean_distance)
+
+    return np.mean(pairwise_means) if pairwise_means else 0.0  # Evitar divisiones por 0
+
