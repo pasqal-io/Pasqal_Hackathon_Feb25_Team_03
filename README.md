@@ -2,14 +2,14 @@
 
 ## Introduction 
 We aim to solve the problem of creating M bus lines each with P bus stops in a city. The formulation is based on the QUBO problem, i.e, minimizing 
-$$
+```math
 F_Q(X) = X^TQX
-$$
+```
 
 where $X$ is a n-dimensional column vector and $Q$ an $n\times n$ matrix. In our context, $X$ will represent the adjancency matrix and Q the cost function (distance). As we want to mninimize the distance from all bus lines, we perform summation over the M lines
-$$
+```math
 f_q(X) = \sum_l^M(X^l)^TQX^l
-$$
+```
 where $l$ is each for each line.
 
 ## Conditions
