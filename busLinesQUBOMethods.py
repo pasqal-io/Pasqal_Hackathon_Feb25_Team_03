@@ -1,6 +1,5 @@
-from IPython.display import display, HTML
-
-display(HTML("<style>.container{width:100% !important;}</style>"))
+# from IPython.display import display, HTML
+# display(HTML("<style>.container{width:100% !important;}</style>"))
 from random import uniform, seed
 from tabulate import tabulate
 from numpy import argmax
@@ -94,9 +93,9 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
     # Restricciones:
     # 1. \sum_{l=0}^{L-1}\sum_{i=0}^{N-1} x_{ij}^{l} \geq 1 \forall j (toda parada tien al menos una salida)
     H_constraints_1 = BinPol()
-    for j in range(N):
+    for l in range(L):
         aux = BinPol()
-        for l in range(L):
+        for j in range(N):
             for i in range(N):
                 aux.add_term(-1, ("x", i, j, l))
         aux.add_term(1, ())
@@ -107,9 +106,9 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
 
     # 2. \sum_{l=0}^{L-1}\sum_{j=0}^{N-1} x_{ij}^{l} \geq 1 \forall i (toda parada tiene al menos una entrada)
     H_constraints_2 = BinPol()
-    for i in range(N):
+    for l in range(L):
         aux = BinPol()
-        for l in range(L):
+        for i in range(N):
             for j in range(N):
                 aux.add_term(-1, ("x", i, j, l))
         aux.add_term(1, ())
