@@ -80,11 +80,11 @@ def draw_graph(G):
 
 # Crear el QUBO para el problema de autobuses
 def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
-    var_shape_set = VarShapeSet(BitArrayShape("x", (N, N, L)))
-    BinPol.freeze_var_shape_set(var_shape_set)
+    var_shape_set = VarShapeSet(BitArrayShape("x", (N, N, L)))  #type: ignore
+    BinPol.freeze_var_shape_set(var_shape_set)  #type: ignore
 
     # Función objetivo: minimizar distancias
-    H_distances = BinPol()
+    H_distances = BinPol()  #type: ignore
     for i in range(N):
         for j in range(N):
             for l in range(L):
@@ -93,9 +93,9 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
     H_constraints = []
     # Restricciones:
      # 1. \sum_{l=0}^{L-1}\sum_{i=0}^{N-1} x_{ij}^{l} \geq 1 \forall j (toda parada tien al menos una salida)
-    H_constraints_1 = BinPol()
+    H_constraints_1 = BinPol()  #type: ignore
     for j in range(N):
-        aux = BinPol()
+        aux = BinPol()  #type: ignore
         for l in range(L):
             for i in range(N):
                 aux.add_term(-1, ('x', i, j, l))
@@ -106,9 +106,9 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
     H_constraints.append(H_constraints_1)
 
     # 2. \sum_{l=0}^{L-1}\sum_{j=0}^{N-1} x_{ij}^{l} \geq 1 \forall i (toda parada tiene al menos una entrada)
-    H_constraints_2 = BinPol()
+    H_constraints_2 = BinPol()  #type: ignore
     for i in range(N):
-        aux = BinPol()
+        aux = BinPol()  #type: ignore
         for l in range(L):
             for j in range(N):
                 aux.add_term(-1, ('x', i, j, l))
@@ -119,21 +119,21 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
     H_constraints.append(H_constraints_2)
 
     # 3. x_{ii}^{l} = 0 \forall i, l (una parada no puede ir a sí misma)
-    H_constraints_3 = BinPol()
+    H_constraints_3 = BinPol()  #type: ignore
     for l in range(L):
         for i in range(N):
-            aux = BinPol()
+            aux = BinPol()  #type: ignore
             aux.add_term(1, ("x", i, i, l))
             H_constraints_3.add(aux.power(2))
 
     H_constraints.append(H_constraints_3)
 
     # 4. if x_{ij}^{l} = 1 then \sum_{k=0}^{N-1} x_{jk}^{l} = 1 \forall i, j, l (si una linea llega a j, tiene que salir de j)
-    H_constraints_4 = BinPol()
+    H_constraints_4 = BinPol()  #type: ignore
     for l in range(L):
         for i in range(N):
             for j in range(N):
-                aux = BinPol()
+                aux = BinPol()  #type: ignore
                 aux.add_term(1, ("x", i, j, l))  # x_{ij}^l
                 for k in range(N):
                     aux.add_term(-1, ("x", j, k, l))  # -sum_k x_{jk}^l
@@ -143,18 +143,18 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
 
     # 5. Cada linea debe ser cerrada y cubrir todos los nodos entre todas las paradas
 
-    H_constraints_5_closed = BinPol()
+    H_constraints_5_closed = BinPol()  #type: ignore
     for l in range(L):
-        aux = BinPol()
+        aux = BinPol()  #type: ignore
         for i in range(N):
             for j in range(N):
                 aux.add_term(1, ("x", i, j, l))  # Contar aristas activas
         aux.add_term(-N, ())  # Penalización para ciclos abiertos
         H_constraints_5_closed.add(aux.power(2))
 
-    H_constraints_5_cover = BinPol()
+    H_constraints_5_cover = BinPol()  #type: ignore
     for j in range(N):
-        aux = BinPol()
+        aux = BinPol()  #type: ignore
         for l in range(L):
             for i in range(N):
                 aux.add_term(
@@ -170,19 +170,19 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
     # 6. Debe existir al menos un camino cerrado que pase por todos los nodos
 
     # Garantizar que el grafo resultante sea completamente conexo
-    H_connectivity_strict = BinPol()
+    H_connectivity_strict = BinPol()  #type: ignore
     for i in range(N):
         for j in range(N):
-            aux = BinPol()
+            aux = BinPol()  #type: ignore
             for l in range(L):
                 aux.add_term(1, ("x", i, j, l))
             aux.add_term(-1, ())  # Asegurar que cada nodo tenga al menos una conexión
             H_connectivity_strict.add(aux.power(2))
 
     # Asegurar que cada nodo esté en un ciclo accesible
-    H_cycles = BinPol()
+    H_cycles = BinPol()  #type: ignore
     for i in range(N):
-        aux = BinPol()
+        aux = BinPol()  #type: ignore
         for j in range(N):
             for l in range(L):
                 aux.add_term(1, ("x", i, j, l))
