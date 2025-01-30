@@ -53,6 +53,7 @@ def draw_graph(G):
     nx.draw_networkx_edges(
         G,
         pos,
+        arrows=True,
         edgelist=curved_edges,
         connectionstyle="arc3,rad=0.2",
         arrowsize=15,
@@ -91,13 +92,13 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
 
     H_constraints = []
     # Restricciones:
-    # 1. \sum_{l=0}^{L-1}\sum_{i=0}^{N-1} x_{ij}^{l} \geq 1 \forall j (toda parada tien al menos una salida)
+     # 1. \sum_{l=0}^{L-1}\sum_{i=0}^{N-1} x_{ij}^{l} \geq 1 \forall j (toda parada tien al menos una salida)
     H_constraints_1 = BinPol()
-    for l in range(L):
+    for j in range(N):
         aux = BinPol()
-        for j in range(N):
+        for l in range(L):
             for i in range(N):
-                aux.add_term(-1, ("x", i, j, l))
+                aux.add_term(-1, ('x', i, j, l))
         aux.add_term(1, ())
         aux.power(2)
         H_constraints_1.add(aux)
@@ -106,11 +107,11 @@ def build_qubo(graph, distances, N: int, L: int, A: float, B: List[float]):
 
     # 2. \sum_{l=0}^{L-1}\sum_{j=0}^{N-1} x_{ij}^{l} \geq 1 \forall i (toda parada tiene al menos una entrada)
     H_constraints_2 = BinPol()
-    for l in range(L):
+    for i in range(N):
         aux = BinPol()
-        for i in range(N):
+        for l in range(L):
             for j in range(N):
-                aux.add_term(-1, ("x", i, j, l))
+                aux.add_term(-1, ('x', i, j, l))
         aux.add_term(1, ())
         aux.power(2)
         H_constraints_2.add(aux)
