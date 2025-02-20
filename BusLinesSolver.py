@@ -11,11 +11,15 @@ import neal
 class Bus_lines_solver:
 
 
-    def __init__(self, N: int, M: int, restrictions_multipliers: Optional[List[float]]=None, seed_number: Optional[int] = None) -> None:
+    def __init__(self, N: int, M: int, restrictions_multipliers: Optional[List[float]]=None, seed_number: Optional[int] = None, numberOfStopsPerLine: Optional[int]=None) -> None:
         self.N = N
         self.M = M
+        if numberOfStopsPerLine is None:
+            numberOfStopsPerLine = int(self.N / self.M)
         if restrictions_multipliers is None:
             restrictions_multipliers = [50.0 for i in range(5)]
+
+        self.p = numberOfStopsPerLine
         self.restrictions_multipliers = restrictions_multipliers
         self.stops_graph, self.distances_matrix = self._create_complete_graph(seed=seed_number)
         self.QUBOmodel = self._create_QUBO()
@@ -55,7 +59,11 @@ class Bus_lines_solver:
         H_cost = sum(self.distances_matrix[i, i] * connections[i, l] for i in range(self.N * self.N) for l in range(self.M))
         H = H_cost
 
-        list_of_restrictions = ["EquallyDistributed", "OneArrivalAtMost", "OneDepartureAtMost", "ClosedPathsOfLenghtP", "NoClosedPathsOfLenghtLessThanP"]
+        list_of_restrictions = ["EquallyDistributed", 
+                                "OneArrivalAtMost", 
+                                "OneDepartureAtMost", 
+                                "IfLineArrivesToStopItDepartsFromIt", 
+                                "AllStopsAreVisited"]
 
         for index, restriction in enumerate(list_of_restrictions):
             restrictions_hamiltonian, lambda_expression= self._callRestrictionMethod(restriction, connections)
@@ -68,8 +76,8 @@ class Bus_lines_solver:
             "lmbEquallyDistributedRestriction": self.restrictions_multipliers[0],
             "lmbOneArrivalAtMostRestriction": self.restrictions_multipliers[1],
             "lmbOneDepartureAtMostRestriction": self.restrictions_multipliers[2],
-            "lmbClosedPathsOfLenghtPRestriction": self.restrictions_multipliers[3],
-            "lmbNoClosedPathsOfLenghtLessThanPRestriccion": self.restrictions_multipliers[4]
+            "lmbIfLineArrivesToStopItDepartsFromItRestriction": self.restrictions_multipliers[3],
+            "lmbAllStopsAreVisitedRestriction": self.restrictions_multipliers[4]
         }
         qubo, offset = self.QUBOmodel.to_qubo(feed_dict=feed_dict)
 
@@ -157,6 +165,15 @@ class Bus_lines_solver:
 
         elif restrictionName == "NoClosedPathsOfLenghtLessThanP":
             return self.__noClosedPathsOfLenghtLessThanPRestriction(connections)
+        
+        elif restrictionName == "GlobalPathOfLenghtN":
+            return self.__globalPathOfLenghtNRestriction(connections)
+        
+        elif restrictionName == "IfLineArrivesToStopItDepartsFromIt":
+            return self.__ifLineArrivesToStopItDepartsFromIt(connections)
+        
+        elif restrictionName == "AllStopsAreVisited":
+            return self.__allStopsAreVisited(connections)
 
         else:
             print("Restriction method not recognized")
@@ -164,15 +181,14 @@ class Bus_lines_solver:
     def __stopsEquallyDistributedRestriction(self, connections: pyqubo.Array):
         H = 0
         lmb = Placeholder("lmbEquallyDistributedRestriction")
-        p = int(self.N / self.M)
         for l in range(self.M):
             terms = sum(connections[i, l] for i in range(self.N * self.N))
-            H += Constraint((terms - p) ** 2, label=f"EquallyDistributedRestriction_line{l}")
+            H += Constraint((terms - self.p) ** 2, label=f"EquallyDistributedRestriction_line{l}")
 
         return H, lmb
 
     def __oneArrivalAtMostRestriction(self, connections: pyqubo.Array):
-        s2 = {(l, i): Binary(f"s_{l}_{i}") for l in range(self.M) for i in range(self.N)}
+        s2 = {(l, i): Binary(f"s2_{l}_{i}") for l in range(self.M) for i in range(self.N)}
         H2 = 0
         lmb2 = Placeholder("lmbOneArrivalAtMostRestriction")
         for l in range(self.M):
@@ -183,7 +199,7 @@ class Bus_lines_solver:
         return H2, lmb2
 
     def __oneDepartureAtMostRestriction(self, connections: pyqubo.Array):
-        s3 = {(l, i): Binary(f"s_{l}_{i}") for l in range(self.M) for i in range(self.N)}
+        s3 = {(l, i): Binary(f"s3_{l}_{i}") for l in range(self.M) for i in range(self.N)}
         H3 = 0
         lmb3 = Placeholder("lmbOneDepartureAtMostRestriction")
         for l in range(self.M):
@@ -196,44 +212,69 @@ class Bus_lines_solver:
     def __closedPathsOfLenghtPRestriction(self, connections: pyqubo.Array):
         H4 = 0
         lmb4 = Placeholder("lmbClosedPathsOfLenghtPRestriction")
-        p = int(self.N / self.M)
         for l in range(self.M):
-            terms4 = sum(self._apply_power_with_reshape(connections[:, l], p)[k * (self.N + 1)] for k in range(self.N))
-            H4 += Constraint((terms4 - p) ** 2, label=f"ClosedPathsOfLenghtPRestriction_line{l}")
+            terms4 = sum(self._apply_power_with_reshape(connections[:, l], self.p)[k * (self.N + 1)] for k in range(self.N))
+            H4 += Constraint((terms4 - self.p) ** 2, label=f"ClosedPathsOfLenghtPRestriction_line{l}")
 
         return H4, lmb4
 
     def __noClosedPathsOfLenghtLessThanPRestriction(self, connections: pyqubo.Array):
         H5 = 0
-        lmb5 = Placeholder("lmbNoClosedPathsOfLenghtLessThanPRestriccion")
-        p = int(self.N / self.M)
+        lmb5 = Placeholder("lmbNoClosedPathsOfLenghtLessThanPRestriction")
         for l in range(self.M):
             terms5 = sum(self._apply_power_with_reshape(connections[:, l], n)[k * (self.N + 1)] for k in range(self.N) for n in
-                         range(p))
+                         range(self.p))
             H5 += Constraint(terms5 ** 2, label=f"NoClosedPathsOfLenghtLessThanPRestriccion_line{l}")
 
         return H5, lmb5
+    
+    def __globalPathOfLenghtNRestriction(self, connections: pyqubo.Array):
+        H6 = 0
+        lmb6 = Placeholder("lmbGlobalPathOfLenghtN")
+        matrixTerms = sum(connections[:, l] for l in range(self.M))
+        terms = sum(self._apply_power_with_reshape(matrixTerms, self.N)[k * (self.N + 1)] for k in range(self.N))
+        H6 += Constraint((terms - self.N) ** 2, label="GlobalPathOfLenghtNRestriction")
 
-    def _apply_power_with_reshape(self, Y: pyqubo.Array, p):
+        return H6, lmb6
+    
+    def __ifLineArrivesToStopItDepartsFromIt(self, connections: pyqubo.Array):
+        H7 = 0
+        lmb7 = Placeholder("lmbIfLineArrivesToStopItDepartsFromItRestriction")
+        for l in range(self.M):
+            for i in range(self.N):
+                for j in range (self.N):
+                    terms7 = sum(connections[j*self.N+k, l] for k in range(self.N))
+                    H7 += Constraint((connections[i*self.N+j, l] - terms7) ** 2, label=f"IfLineArrivesToStopItDepartsFromItRestriction_line{l}_stop{i}_stop{j}")
+
+        return H7, lmb7
+    
+    def __allStopsAreVisited(self, connections: pyqubo.Array):
+        s41 = {(j): Binary(f"s8_{j}")for j in range(self.N)}
+        s42 = {(j): Binary(f"s8_{j}")for j in range(self.N)}
+        H8 = 0
+        lmb8 = Placeholder("lmbAllStopsAreVisitedRestriction")
+        for j in range(self.N):
+            terms8 = sum(connections[i*self.N+j, l] for i in range(self.N) for l in range(self.M))
+            H8 += Constraint((terms8 - 1 -s41[j]-2*s42[j]) ** 2, label=f"AllStopsAreVisitedRestriction_stop{j}")
+
+        return H8, lmb8
+
+
+    def _apply_power_with_reshape(self, Y: pyqubo.Array, p: int) -> pyqubo.Array:
         """
-        Converts Y (a PyQUBO Array) to matrix X, applies the power and returns the result in vector form.
-
-        Parameters:
-            Y (Array): PyQUBO array with binary variables.
-            p (int): Power to which the matrix will be raised.
-
-        Returns:
-            list: Vector resulting after applying the power p to the matrix.
+        Converts Y (a pyqubo.Array object) into a square matrix X, raises it to the power p, 
+        and returns the result as a flattened vector.
         """
-        X = np.array(Y).reshape(self.N, self.N)
 
-        X_p = X
-        for _ in range(p - 1):
-            X_p = [[sum(X_p[i][k] * X[k][j] for k in range(self.N)) for j in range(self.N)] for i in range(self.N)]
+        X = Y.reshape((self.N, self.N))
 
-        Y_p = [X_p[i][j] for i in range(self.N) for j in range(self.N)]
+        for _ in range(p - 1):  # p - 1 because we already have the first X
+            X = X.matmul(Y.reshape((self.N, self.N)))
 
-        return Y_p
+        # Step 3: Reshape back into a vector of N^2 components and return
+        return X.reshape((self.N * self.N,))
+
+
 
 
 
