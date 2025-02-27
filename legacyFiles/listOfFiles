@@ -1,0 +1,5 @@
+- busLinesQUBOMethods.py -> methods for solving the original QUBO (binary variables with 3 indices) using dadk (privative software)
+- QUBOSolver.ipynb -> Execution of the methods from busLinesQUBOMethods.py
+- busLinesSolver.py -> Class for solving the QUBO in the new formulation but with older, non-symmetric, restrictions in PyQUBO
+- busLinesProblem.ipynb -> Notebook to execute busLinesSolver.py
+- graph_checking.ipynb -> Notebook for check a graph with older constraints
