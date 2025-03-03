@@ -51,11 +51,43 @@ Every condition is weighted according to it's importance.
 With these conditions and appropiate weights, we should be able to generate a valid bus route. The conditions are also produced in a way that the final Q matrix is symmetric as needed by the geometrical embeding.
 
 
+## QUBO problem: iteration 2
+
+Using the formulation of the Traveling Salesman Problem, one line of a bus is implemented. An initial stop (i) and final stop (j) are selected, allowing for i=j and not necessarily being i=0, j=N-1. The route has p+1 stops. The distances remain asymmetric (but the routes can be understood to be bidirectional). The variables are now a total of $R=N(p+1)$ and are of the shape $(y_{0N+0}, ..., y_{0N+N-1}, y_{1N+0},...,y_{1N+N-1},... ,..., y_{pN+N-1})$. The encoding is now thought to be about time-steps. More information in https://github.com/microsoft/qio-samples/blob/danielstocker-slc-ship-loading/samples/traveling-salesperson/traveling-salesperson.ipynb. There, the only difference is that $p=N$.
+
+The cost function is then
+
+```math
+    \sum_{k=0}^{p-1}\sum_{i=0}^{N-1}\sum_{j=0}^{N-1} (x_{Nk+i}\cdot x_{N(k+1)+j}D_{ij})
+```
+
+The cost function in the $Q_matrix$ representation is just inserting the distances cost matrix $D$ into blocks $0;1$, $1;2$,...,$N-2;N-1$. For symmetric purpuses, the cost $Q_matrix^{T}$ is also added. 
+
+### Conditions
+
+Every condition has a weight which is aimed to be optimized.
+
+1. In each step the bus is in only one stop: $\sum_{k=0}^{p}\sum_{i=0}^{N-1}\sum_{j=0}^{N-1}(x_{i+Nk}x_{j+Nk})=0$ (In the reference this term is not symmetric as it takes only $i<j$. Here we consider the rest of the terms, which only adds more weight to the penalty).
+2. In each step, the bus should be somewhere: $(\sum_{k}^{N(p+1)-1}x_{k}-(p+1))^2$
+3. Just one visit to each node: $\sum_{k}^{N(p+1)-1}\sum_{f=k+N,step \;N}^{Np-1}x_{k}x_{f}=0$
+4. Start node is negatively penalized: $-\lambda_4 x_{0+i}$
+5. End node is negatively penalized: $-\lambda_5 x_{Np+j}$
+
+### Optimization of weights (lambda parameters)
+
+Some strategies for choosing the most suitable lambda parameters are followed. The first one is to select them all to be equall as the maximum distance of the distances matrix.
+
+### Implementation of more routes
+
+An approach for finding new routes for the same stops which connect all the stops could be to select the new start and end nodes as well as eliminate the previous formed line's start and end nodes. Therefore we allow for crossing lines but without starting or ending in the same nodes.
+
+
 ## Code Description
 
 - `get_bus_stops.ipynb`: Jupyter Notebook where we view and generate the amenities from a city. We can also visualize the result of QUBOSolver.
-- `PulserQUBOMethods`: Methods for creating the QUBO described above, generate translations between $x_{ij}^{l}$ (adjacency matrix) and $y_{k}$ (QUBO) representations.. It can also compute the solutions via brute force as well as draw the stops graphs (do not confuse with the nodes $y$ graph) from a given solution.
+- `PulserQUBOMethods`: Methods for creating the QUBO 1. described above, generate translations between $x_{ij}^{l}$ (adjacency matrix) and $y_{k}$ (QUBO) representations. It can also compute the solutions via brute force as well as draw the stops graphs (do not confuse with the nodes $y$ graph) from a given solution.
 - `pulserQUBO.py`: Jupyter Notebook for use the methods from PulserQUBOMethods for given parameters ($N$, $p$ and penalty weights). It produces a symmetric $Q$ matrix which can be used for computing the optimization algorithm.
 - `analog_qaoa.ipynb`: Jupyter Notebook for embeeding of a symmetric $Q$ matrix into a geometrical structure for solving the QUBO with Pulser.
 - `data/`: Where input files are stored.
 - `results/`: Where output files are stored.
+- `TSP_Formulation`: Methods for creating the QUBO 2. described above. It can generate the Q_matrix, as well as trying different strategies in optimization of lambdas and mixing of different routes. Solver by brute force and DWave annealer available.
