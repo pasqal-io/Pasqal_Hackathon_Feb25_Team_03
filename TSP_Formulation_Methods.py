@@ -5,6 +5,7 @@ from typing import Optional, List, Tuple
 from scipy.optimize import minimize
 from neal import SimulatedAnnealingSampler
 from dimod import BinaryQuadraticModel
+import itertools
 
 """
 Methods to create the QUBO matrix for using it in Pulser with the Traveling Salesman Problem representation.
@@ -376,7 +377,7 @@ def solve_qubo_with_Dwave(Q, num_reads=100):
     
     return best_solution, best_cost
 
-def brute_force_finding(Q_matrix, distances_matrix, p):
+def brute_force_finding(Q_matrix, distances_matrix, p, bidirectional= True):
     """
     Brute force method to find the optimal solution.
     It returns the bitstring, the cost with constraints and the distances.
@@ -395,7 +396,10 @@ def brute_force_finding(Q_matrix, distances_matrix, p):
     distances = []
     for b in bitstrings:
         b_array = np.array(list(b), dtype=int)
-        distances.append(calculate_distances_cost(b_array, distances_matrix, p))
+        if bidirectional:
+            distances.append(calculate_distances_cost_of_bidireccional_routes(b_array, distances_matrix, p))
+        else:
+            distances.append(calculate_distances_cost(b_array, distances_matrix, p))
 
     zipped = zip(bitstrings, costs, distances)
     sort_zipped = sorted(zipped, key=lambda x: x[1])
@@ -722,3 +726,148 @@ def plot_brute_force_minimums(solutions_zipped, N, p, startNode, endNode, rangeP
 
     fig.tight_layout()
     plt.title("Total cost vs Distance cost")
+
+
+# Multiline Methods
+
+def eliminate_stop_from_distance_matrix(distances, stop):
+    """
+    Eliminate a stop from the (NxN) distance matrix.
+    """
+    distances_copy = distances.copy()
+    distances_copy = np.delete(distances, stop, axis=0)
+    distances_copy = np.delete(distances, stop, axis=1)
+    return distances_copy
+
+def add_independent_stop_to_solution(solution, N, p, stop):
+    """
+    Add an independent, non connected stop to the solution in the exact position.
+    """
+    solution_copy = solution.copy()
+    for k in range(p+1):
+        solution_copy = np.insert(solution_copy, k*N + stop, 0)
+    
+    return solution_copy
+
+
+def generate_solutions_for_multiple_lines(distances, p, startNodes, endNodes, num_lines, lambdas, num_reads):
+    """
+    Generate solutions for multiple lines. When the first line is computed, the stops are removed from the distance matrix.
+    """
+
+    N = distances.shape[0]
+    solutions = []
+    distances_copy = distances.copy()
+    for l in range(num_lines):
+        if l == 0:
+            Q, _ = create_QUBO_matrix(distances_copy, p, startNodes[l], endNodes[l], lambdas[l])
+            solution, _ = solve_qubo_with_Dwave(Q, num_reads)
+        else:
+            for j in range(l):
+                distances_copy = eliminate_stop_from_distance_matrix(distances_copy, startNodes[j])
+                distances_copy = eliminate_stop_from_distance_matrix(distances_copy, endNodes[j])
+            Q, _ = create_QUBO_matrix(distances, p, startNodes[l], endNodes[l], lambdas[l])
+            solution, _ = solve_qubo_with_Dwave(Q, num_reads)
+
+            for j in range(l):
+                solution = add_independent_stop_to_solution(solution, N, p, startNodes[j])
+                solution = add_independent_stop_to_solution(solution, N, p, endNodes[j])
+        
+        solutions.append(solution)
+        if l < num_lines - 1:
+            if startNodes[l]< startNodes[l+1]:
+                startNodes[l+1] -= 1
+            if endNodes[l] < endNodes[l+1]:
+                endNodes[l+1] -= 1
+
+    return solutions
+
+def generate_solutions_for_multiple_lines_uninformed(distances, p, startNodes, endNodes, num_lines, lambdas, num_reads):
+    """
+        Generate solutions for multiple lines. The stops are not removed from the distance matrix.
+    """
+
+    solutions = []
+    for l in range(num_lines):
+        Q, _ = create_QUBO_matrix(distances, p, startNodes[l], endNodes[l], lambdas[l])
+        solution,_ = solve_qubo_with_Dwave(Q, num_reads)
+        solutions.append(solution)
+    
+    return solutions
+
+def check_multiline_validity(list_of_solutions, N, p, startNodes, endNodes, num_lines, returnFormat=False):
+    """
+    Check the validity of the multiline solutions.
+    """
+
+    for l in range(num_lines):
+        if not check_solution_return(list_of_solutions[l], N, p, startNodes[l], endNodes[l]):
+            if returnFormat:
+                return False
+            else:
+                print(f"Solution {l} is not valid.")
+
+    # Global constraint: All stops are visited
+    visited_stops = np.zeros(N)
+    for l in range(num_lines):
+        for k in range(N):
+            for f in range(k, N*(p+1), N):
+                visited_stops[k] += list_of_solutions[l][f]
+    
+    for i in range(N):
+        if visited_stops[i] < 1:
+            if returnFormat:
+                return False
+            else:
+                print(f"Stop {i} is not visited.")
+
+    if returnFormat:
+        return True
+    else:
+        print("All solutions are valid.")
+        return None
+    
+
+def distance_cost_of_multilines(list_of_solutions, distances, p, bidirectional=True):
+    """
+    Calculate the distance cost of the multiline solutions.
+    """
+
+    total_cost = 0
+    for l in range(len(list_of_solutions)):
+        if bidirectional:
+            total_cost += calculate_distances_cost_of_bidireccional_routes(list_of_solutions[l], distances, p)
+        else:
+            total_cost += calculate_distances_cost(list_of_solutions[l], distances, p)
+    
+    return total_cost
+
+def generate_all_start_end_combinations(N, L):
+    """
+    Genera todas las combinaciones posibles de startNodes y endNodes cumpliendo:
+    - startNodes[i] ≠ startNodes[j] (todos distintos)
+    - endNodes[i] ≠ endNodes[j] (todos distintos)
+    - startNodes[i] ≠ endNodes[j] (no pueden repetirse en ambos)
+    - Se eliminan duplicados donde (startNodes, endNodes) es equivalente a (endNodes, startNodes)
+
+    Parámetros:
+    - N: Número total de nodos disponibles (valores entre 0 y N-1).
+    - L: Número de líneas (longitud de los arrays).
+
+    Retorna:
+    - Lista de tuplas (startNodes, endNodes) con todas las combinaciones válidas.
+    """
+    nodes = list(range(N))
+    valid_combinations = []
+
+    # Generar todas las combinaciones posibles de L nodos distintos para startNodes (SIN importar orden)
+    for start_comb in itertools.combinations(nodes, L):
+        remaining_nodes = set(nodes) - set(start_comb)
+        
+        # Generar todas las permutaciones de L nodos para endNodes (IMPORTA el orden)
+        for end_perm in itertools.permutations(remaining_nodes, L):
+            valid_combinations.append((np.array(start_comb), np.array(end_perm)))
+
+    return valid_combinations
+
+
