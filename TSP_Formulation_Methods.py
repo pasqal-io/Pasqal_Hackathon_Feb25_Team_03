@@ -61,10 +61,7 @@ def create_QUBO_matrix(distances, p, startNode: Optional[int] = 0, endNode: Opti
 
     # Cost funtion for the route: distances
 
-    for k in range(p):
-        for i in range(N):
-            for j in range(N):
-                Q[i + N*k, j + N*(k+1)] += distances[i,j]
+    Q = convertCostMatrixToQUBORepresentation(distances, p)
 
     Q = Q + Q.T
 
@@ -72,40 +69,99 @@ def create_QUBO_matrix(distances, p, startNode: Optional[int] = 0, endNode: Opti
     # Constraint 1: just one stop in each position of the route
 
     if constraints_activations[0]:
-        for l in range(p+1):
-            for i in range(N):
-                for j in range(N):
-                    if i != j:
-                        Q[i + N*l, j + N*l] += list_of_lambdas[0]
+        Q += list_of_lambdas[0]*create_matrix_constraint_1(N, p)
 
     # Constraint 2: at least one stop in each position of the route
 
     if constraints_activations[1]:
-        for k in range(R):
-            Q[k, k] += list_of_lambdas[1] * (1 - 2 * (p+1))
-            for l in range(0, R):
-                if l != k:
-                    Q[k, l] += list_of_lambdas[1]
+        Q += list_of_lambdas[1]*create_matrix_constraint_2(N, p)
 
 
     # Constaint 3: just one visit to each node
     if constraints_activations[2]:
-        for k in range(R):
-            for f in range(k+N, N*(p+1), N):
-                Q[k, f] += list_of_lambdas[2]
-                Q[f,k] += list_of_lambdas[2]
+        Q += list_of_lambdas[2]*create_matrix_constraint_3(N, p)
 
     # Constaint 4: start node
 
     if constraints_activations[3]:
-        Q[startNode, startNode] += -list_of_lambdas[3]
+        Q+= list_of_lambdas[3]*create_matrix_constraint_4(N, p,startNode)
 
     # Constaint 5: end node
     if constraints_activations[4]:
-        Q[N*p+endNode, N*p+endNode] += -list_of_lambdas[4]
+        Q += list_of_lambdas[4]*create_matrix_constraint_5(N, p, endNode)
 
 
     return Q, list_of_lambdas
+
+
+def create_matrix_constraint_1(N, p) -> np.array:
+    """
+    Create the matrix for the constraint 1.
+    """
+
+    R = N*(p+1)
+    Q = np.zeros((R,R))
+
+    for l in range(p+1):
+        for i in range(N):
+            for j in range(N):
+                if i != j:
+                    Q[i + N*l, j + N*l] += 1
+
+    return Q
+
+def create_matrix_constraint_2(N, p) -> np.array:
+    """
+    Create the matrix for the constraint 2.
+    """
+
+    R = N*(p+1)
+    Q = np.zeros((R,R))
+
+    for k in range(R):
+        Q[k, k] += 1 - 2 * (p+1)
+        for l in range(0, R):
+            if l != k:
+                Q[k, l] += 1
+
+    return Q
+
+def create_matrix_constraint_3(N, p) -> np.array:
+    """
+    Create the matrix for the constraint 3.
+    """
+
+    R = N*(p+1)
+    Q = np.zeros((R,R))
+
+    for k in range(R):
+        for f in range(k+N, N*(p+1), N):
+            Q[k, f] += 1
+            Q[f,k] += 1
+
+    return Q
+
+def create_matrix_constraint_4(N, p, startNode) -> np.array:
+    """
+    Create the matrix for the constraint 4.
+    """
+
+    R = N*(p+1)
+    Q = np.zeros((R,R))
+    Q[startNode, startNode] += -1
+
+    return Q
+
+def create_matrix_constraint_5(N, p, endNode) -> np.array:
+    """
+    Create the matrix for the constraint 5.
+    """
+
+    R = N*(p+1)
+    Q = np.zeros((R,R))
+    Q[N*p+endNode, N*p+endNode] += -1
+
+    return Q
 
 
 def is_symmetric(matrix, tol=1e-8):
