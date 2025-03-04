@@ -61,7 +61,7 @@ def create_QUBO_matrix(distances, p, startNode: Optional[int] = 0, endNode: Opti
 
     # Cost funtion for the route: distances
 
-    Q = convertCostMatrixToQUBORepresentation(distances, p)
+    Q += convertCostMatrixToQUBORepresentation(distances, p)
 
     Q = Q + Q.T
 
@@ -322,9 +322,9 @@ def check_constraint_2(solution_array, N, p):
     return True
 
 def check_constraint_3(solution_array, N, p):
-    for k in range(N*(p+1)):
+    for k in range(N):
         sum = 0
-        for f in range(k+N, N*(p+1), N):
+        for f in range(k, N*(p+1), N):
             sum += solution_array[f]
         if sum > 1:
             return False
@@ -339,53 +339,7 @@ def check_constraint_5(solution_array, endNode):
     if solution_array[endNode] == 0:
         return False
     return True
-    
 
-
-# Drawing
-
-
-def draw_solution_graph(solution_array, distances, p, startNode, endNode):
-    """
-    Draw the graph of the solution.
-    """
-
-    N = distances.shape[0]
-    R = N*(p+1)
-
-    # Create the graph and add a node for each stop
-
-    G = nx.Graph()
-    for i in range(N):
-        G.add_node(i)
-
-    # Add edges based on the solution
-
-    for k in range(p):
-        for i in range(N):
-            for j in range(N):
-                if solution_array[i + N*k] == 1 and solution_array[j + N*(k+1)] == 1:
-                    G.add_edge(i,j)
-
-    # Is the node is a start node, it is colored in red. If it is the end node it is colored in green.
-
-    color_map = []
-    for node in G:
-        if node == startNode:
-            color_map.append('red')
-        elif node == endNode:
-            color_map.append('green')
-        else:
-            color_map.append('blue')
-
-    # Draw the graph
-
-    # If the edje i,j is in the solution, the nodes will be drawn at a distance distances[i,j]
-
-    pos = nx.spring_layout(G)
-    nx.draw(G, pos, node_color=color_map, with_labels=True)
-    labels = nx.get_edge_attributes(G, 'weight')
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=labels)
 
 
     # Solve QUBO 
@@ -451,9 +405,9 @@ def brute_force_finding(Q_matrix, distances_matrix, p):
 # Optimization
 
 
-def optimize_lambdas(distances, p, startNode=0, endNode=None, methodIndex=2, initial_solution= None, initial_lambdas=None):
+def optimize_lambdas_given_solution(distances, p, startNode=0, endNode=None, methodIndex=2, initial_solution= None, initial_lambdas=None):
     """
-    Optimize the lambdas for the QUBO matrix with adaptive balancing between cost and constraints.
+    Optimize the lambdas for the QUBO matrix with adaptive balancing between cost and constraints. It reduces the cost of a given solution.
 
     Parameters
     ----------
@@ -521,31 +475,250 @@ def optimize_lambdas(distances, p, startNode=0, endNode=None, methodIndex=2, ini
     
     return res.x
 
+def calculate_upper_bound_distances(distances, p):
+    """
+    For a solution with all the stops activated in all time steps, it calculates the cost function as an upper bound for the constraints.
+    """
+    distances_QUBO = convertCostMatrixToQUBORepresentation(distances, p)
+    distances_QUBO_t = distances_QUBO.T + distances_QUBO
+    maxArray = np.ones(distances_QUBO_t.shape[0])
+    return maxArray.T @ distances_QUBO_t @ maxArray
 
-def contruct_complete_solution(distances, p, startNode, endNode, method, iterations_lambda, iterations_solver):
+def update_lambdas(lambdas, scaling_factor, solution, N, p, startNode, endNode):
+    """
+    For a given solution, it scales the lambdas based on the constraints that are not fulfilled.
+
+    Parameters
+    ----------
+
+    lambdas : np.array
+        Array with the lambdas.
+    scaling_factor : float
+        Scaling factor for the lambdas.
+    solution : np.array 
+        Solution in the QUBO representation.
+    N : int
+        Number of stops.
+    p : int
+        Number of travels in the route.
+
+    Returns
+    -------
+    lambdas_updated : np.array
+        Updated lambdas.
+    """
+    lambdas_updated = []
+    endNode = N*p + endNode
+    for i in range(len(lambdas)):
+        sum = lambdas[i]
+        if i == 0:
+            if not check_constraint_1(solution,N, p):
+                sum = sum + scaling_factor
+        elif i == 1:
+            if not check_constraint_2(solution,N, p):
+                sum = sum + scaling_factor
+        elif i == 2:
+            if not check_constraint_3(solution,N, p):
+                sum = sum + scaling_factor
+        elif i == 3:
+            if not check_constraint_4(solution, startNode):
+                sum = sum + scaling_factor
+        elif i == 4:
+            if not check_constraint_5(solution, endNode):
+                sum = sum + scaling_factor
+        lambdas_updated.append(sum)
+
+    return lambdas_updated
+
+
+def find_optimized_solution(distances, p, N, startNode, endNode, scaling_factor, max_iterations, num_reads_solver, initial_lambdas = None):
+    """
+    For given distances, travels, start and end nodes, it finds the optimized solution based on the iteration over the funcion update lambdas
+    and solving the QUBO with DWave annealer.
+
+    Parameters
+    ----------
+    distances : np.array
+        Matrix (NxN) with the distances between the stops. It is not symmetric.
+    p : int
+        Number of travels in the route.
+    N : int
+        Number of stops.
+    startNode : int
+        Index of the start stop.
+    endNode : int
+        Index of the end stop.
+    scaling_factor : float
+        Scaling factor for the lambdas.
+    max_iterations : int
+        Maximum number of iterations.
+    num_reads_solver : int
+        Number of reads for the DWave annealer.
+    
+    Returns
+    -------
+    solution : np.array
+        Optimized solution in the QUBO representation.
+    """
+    if initial_lambdas is not None:
+        lambdas = initial_lambdas
+    else:
+        lambdas = [0.01*calculate_upper_bound_distances(distances, p) for _ in range(5)] # Start and end nodes are not penalized in the beggining as the have negative penalties
+    Q_matrix,_ = create_QUBO_matrix(distances, p, startNode, endNode, lambdas)
+    solution, _ = solve_qubo_with_Dwave(Q_matrix, num_reads=num_reads_solver)
+    if check_solution_return(solution, N, p, startNode, endNode):
+        return solution, lambdas
+    else:
+        for i in range(max_iterations):
+            lambdas = update_lambdas(lambdas, scaling_factor, solution, N, p, startNode, endNode)
+            Q_matrix,_ = create_QUBO_matrix(distances, p, startNode, endNode, lambdas)
+            solution, _ = solve_qubo_with_Dwave(Q_matrix, num_reads=num_reads_solver)
+            if check_solution_return(solution, N, p, startNode, endNode):
+                return solution, lambdas
+        print("No solution found")
+        return solution, lambdas
+    
+def count_most_violated_constraints(solutions_zipped, N, p, startNode, endNode, plotRange = 20):
+    """
+    Count the most violated constraints in a list of solutions.
+    """
+    constraints = [0, 0, 0, 0, 0]
+    for i in range(len(solutions_zipped[:plotRange])):
+        solution = np.array(list(solutions_zipped[i][0]), dtype=int)
+        if not check_constraint_1(solution, N, p):
+            constraints[0] += 1
+        if not check_constraint_2(solution, N, p):
+            constraints[1] += 1
+        if not check_constraint_3(solution, N, p):
+            constraints[2] += 1
+        if not check_constraint_4(solution, startNode):
+            constraints[3] += 1
+        if not check_constraint_5(solution, endNode):
+            constraints[4] += 1
+    for j in range(len(constraints)):
+        constraints[j] = constraints[j] / plotRange
+    return constraints
+
+
+# Presentation
+
+# Drawing
+
+
+def draw_solution_graph(solution_array, distances, p, startNode, endNode):
+    """
+    Draw the graph of the solution.
+    """
+
     N = distances.shape[0]
-    initial_solution = generate_valid_initial_solution(N, p, startNode, endNode)
-    lambdas = [np.max(distances) for _ in range(5)]
-    Q_matrix = None
+    R = N*(p+1)
 
-    for i in range(iterations_lambda):
-        lambdas = optimize_lambdas(distances, p, startNode, endNode, method, initial_solution=initial_solution, initial_lambdas = lambdas)
-        Q_matrix, _ = create_QUBO_matrix(distances, p, startNode, endNode, lambdas)
-        initial_solution, _ = solve_qubo_with_Dwave(Q_matrix, iterations_solver)
+    # Create the graph and add a node for each stop
 
-    best_solution = initial_solution
-    best_solution_matrix_cost = calculate_cost(best_solution, Q_matrix)
-    best_solution_cost = calculate_distances_cost(best_solution, distances, p)
-    best_solution_total_cost = calculate_distances_cost_of_bidireccional_routes(best_solution, distances, p)
+    G = nx.Graph()
+    for i in range(N):
+        G.add_node(i)
 
-    resultsDict = {
-        "lambdas": lambdas,
-        "best_solution": best_solution,
-        "best_solution_matrix_cost": best_solution_matrix_cost,
-        "best_solution_cost": best_solution_cost,
-        "best_solution_total_cost": best_solution_total_cost,
-        "solution_validity": check_solution_return(best_solution, N, p, startNode, endNode),
-        "Q_matrix": Q_matrix
-    }
+    # Add edges based on the solution
 
-    return resultsDict
+    for k in range(p):
+        for i in range(N):
+            for j in range(N):
+                if solution_array[i + N*k] == 1 and solution_array[j + N*(k+1)] == 1:
+                    G.add_edge(i,j)
+
+    # Is the node is a start node, it is colored in red. If it is the end node it is colored in green.
+
+    color_map = []
+    for node in G:
+        if node == startNode:
+            color_map.append('red')
+        elif node == endNode:
+            color_map.append('green')
+        else:
+            color_map.append('blue')
+
+    # Draw the graph
+
+    # If the edje i,j is in the solution, the nodes will be drawn at a distance distances[i,j]
+
+    pos = nx.spring_layout(G)
+    nx.draw(G, pos, node_color=color_map, with_labels=True)
+    labels = nx.get_edge_attributes(G, 'weight')
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=labels)
+
+
+def show_parameters_of_solution(solution, distances, N, p, startNode, endNode, lambdas = None):
+    """
+    Show the parameters of the solution.
+
+    Returns
+    -------
+
+    Q_matrix : np.array
+        QUBO matrix.
+    solution_cost : float
+        Cost of the solution.
+    solution_total_cost : float
+        Total cost of the solution as considered bidirectional.
+
+    """
+
+    solution_cost = calculate_distances_cost(solution, distances, p)
+    solution_total_cost = calculate_distances_cost_of_bidireccional_routes(solution, distances, p)
+
+    print("\nOptimized solution:")
+    print(solution)
+    print("\nOptimized solution cost:")
+    print(solution_cost)
+    print("\nOptimized solution total cost:")
+    print(solution_total_cost)
+
+    if lambdas is not None:
+        print("\nLambdas:")
+        print(lambdas)
+
+    print("\nValidity of the solution:")
+    print(check_solution_return(solution, N, p, startNode, endNode))
+
+    Q_matrix, _ = create_QUBO_matrix(distances, p, startNode, endNode, lambdas)
+
+    return Q_matrix, solution_cost, solution_total_cost
+
+
+def plot_brute_force_minimums(solutions_zipped, N, p, startNode, endNode, rangePlot=20):
+    """
+    Plot the minimums found with the brute force method.
+    - The left Y-axis shows the total cost.
+    - The right Y-axis shows the distance cost.
+    - Solutions are colored by validity (yellow = valid, blue = invalid).
+    """
+
+    validity = []
+    costs = []
+    distance_costs = []
+
+    for i in range(len(solutions_zipped[:rangePlot])):
+        solution = np.array(list(solutions_zipped[i][0]), dtype=int)
+        costs.append(solutions_zipped[i][1])  # Total cost including constraints
+        distance_costs.append(solutions_zipped[i][2])  # Distance cost
+        validity.append(check_solution_return(solution, N, p, startNode, endNode))
+
+    fig, ax1 = plt.subplots(figsize=(10, 5))
+
+    # Primer eje Y (coste total)
+    ax1.set_xlabel("Solution index (ordered by total cost)")
+    ax1.set_ylabel("Total cost", color="blue")
+    scatter = ax1.scatter(range(len(costs)), costs, c=validity, cmap="coolwarm", alpha=0.7, label="Total cost")
+    ax1.tick_params(axis='y', labelcolor="blue")
+
+    # Segundo eje Y (coste en distancia)
+    ax2 = ax1.twinx()
+    ax2.set_ylabel("Distance cost", color="black")
+    for i in range(len(costs)):
+        if validity[i]:  # Solo para soluciones válidas
+            ax2.scatter(i, distance_costs[i], color="black", marker="x", s=80, label="Distance cost" if i == 0 else "")
+    ax2.tick_params(axis='y', labelcolor="black")
+
+    fig.tight_layout()
+    plt.title("Total cost vs Distance cost")
