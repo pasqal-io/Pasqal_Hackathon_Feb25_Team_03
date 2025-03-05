@@ -754,7 +754,6 @@ def generate_solutions_for_multiple_lines(distances, p, startNodes, endNodes, nu
     """
     Generate solutions for multiple lines. When the first line is computed, the stops are removed from the distance matrix.
     """
-
     N = distances.shape[0]
     solutions = []
     distances_copy = distances.copy()
@@ -786,7 +785,6 @@ def generate_solutions_for_multiple_lines_uninformed(distances, p, startNodes, e
     """
         Generate solutions for multiple lines. The stops are not removed from the distance matrix.
     """
-
     solutions = []
     for l in range(num_lines):
         Q, _ = create_QUBO_matrix(distances, p, startNodes[l], endNodes[l], lambdas[l])
@@ -806,6 +804,7 @@ def check_multiline_validity(list_of_solutions, N, p, startNodes, endNodes, num_
                 return False
             else:
                 print(f"Solution {l} is not valid.")
+                return None
 
     # Global constraint: All stops are visited
     visited_stops = np.zeros(N)
@@ -820,6 +819,7 @@ def check_multiline_validity(list_of_solutions, N, p, startNodes, endNodes, num_
                 return False
             else:
                 print(f"Stop {i} is not visited.")
+                return None
 
     if returnFormat:
         return True
@@ -870,4 +870,54 @@ def generate_all_start_end_combinations(N, L):
 
     return valid_combinations
 
+
+def draw_multiple_solutions_graph(solutions_list, distances, p, startNodes, endNodes):
+    """
+    Draws a graph with multiple bus lines given a list of solutions.
+    
+    - Each solution represents a bus line.
+    - Each bus line is drawn with a different color.
+    - If multiple lines share an edge, multiple edges of different colors will be drawn.
+    """
+    N = distances.shape[0]
+    G = nx.Graph()
+
+    for i in range(N):
+        G.add_node(i)
+
+    color_palette = itertools.cycle(plt.cm.tab10.colors) 
+
+    edge_colors = {} 
+
+    for solution_array, startNode, endNode, color in zip(solutions_list, startNodes, endNodes, color_palette):
+        for k in range(p):
+            for i in range(N):
+                for j in range(N):
+                    if solution_array[i + N*k] == 1 and solution_array[j + N*(k+1)] == 1:
+                        edge = (i, j) if i < j else (j, i)
+                        if edge not in edge_colors:
+                            edge_colors[edge] = []
+                        edge_colors[edge].append(color)
+
+    color_map = []
+    for node in G.nodes():
+        if node in startNodes:
+            color_map.append('red')
+        elif node in endNodes:
+            color_map.append('green')  
+        else:
+            color_map.append('blue')  
+
+
+    pos = nx.spring_layout(G, seed=42) 
+    nx.draw(G, pos, node_color=color_map, with_labels=True, node_size=500, edge_color="gray", alpha=0.5)
+
+    for edge, colors in edge_colors.items():
+        i, j = edge
+        for idx, color in enumerate(colors):
+            offset = 0.05 * (idx - len(colors) / 2)
+            edge_pos = {i: (pos[i][0], pos[i][1] + offset), j: (pos[j][0], pos[j][1] + offset)}
+            nx.draw_networkx_edges(G, edge_pos, edgelist=[edge], edge_color=[color], width=2)
+
+    plt.title("Complete bus route lines")
 
