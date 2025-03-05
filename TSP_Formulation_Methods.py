@@ -368,7 +368,7 @@ def solve_qubo_with_Dwave(Q, num_reads=100):
     Solve the QUBO problem using D-Wave's Simulated Annealing Sampler.
     """
     num_vars = Q.shape[0]
-    Q_dict = {(i, j): Q[i, j] for i in range(num_vars) for j in range(i, num_vars)}
+    Q_dict = {(i, j): Q[i, j] for i in range(num_vars) for j in range(num_vars)}
     
     bqm = BinaryQuadraticModel.from_qubo(Q_dict)
     sampler = SimulatedAnnealingSampler()
@@ -581,7 +581,6 @@ def find_optimized_solution(distances, p, N, startNode, endNode, scaling_factor,
             solution, _ = solve_qubo_with_Dwave(Q_matrix, num_reads=num_reads_solver)
             if check_solution_return(solution, N, p, startNode, endNode):
                 return solution, lambdas
-        print("No solution found")
         return solution, lambdas
     
 def count_most_violated_constraints(solutions_zipped, N, p, startNode, endNode, plotRange = 20):
@@ -621,6 +620,37 @@ def load_lambda_means(concrete_simulations):
     all_weights = np.array(all_weights)  # Shape: (num_files, 5)
 
     return np.mean(all_weights, axis=0).tolist() 
+
+
+
+def show_statistics_lambdas(solutions_analysis_array):
+    """
+    Show, for a given set of complete combinations of solutions, the statistics of the lambdas.
+    """
+
+    longitude = solutions_analysis_array.shape[0]
+
+    # Sum over all the solutions that are correct
+    correct_solutions = np.sum(solutions_analysis_array[:,2])
+
+    # Relative percentage of correct solutions
+    percentage_correct_solutions = correct_solutions/longitude
+
+    print(f"Percentage of correct solutions: {percentage_correct_solutions:.2f}\n")
+
+    for i in range(5):
+        correct_solutions_start_i = np.sum(solutions_analysis_array[np.where(solutions_analysis_array[:,0] == i)][:,2])
+        total_solutions_start_i = len(solutions_analysis_array[np.where(solutions_analysis_array[:,0] == i)])
+        percentage_correct_solutions_start_i = correct_solutions_start_i/total_solutions_start_i
+
+        print(f"Percentage of correct solutions starting at node {i}: {percentage_correct_solutions_start_i:.2f}")
+
+        correct_solutions_end_i = np.sum(solutions_analysis_array[np.where(solutions_analysis_array[:,1] == i)][:,2])
+        total_solutions_end_i = len(solutions_analysis_array[np.where(solutions_analysis_array[:,1] == i)])
+        percentage_correct_solutions_end_i = correct_solutions_end_i/total_solutions_end_i
+
+        print(f"Percentage of correct solutions ending at node {i}: {percentage_correct_solutions_end_i:.2f}\n")
+
 
 
 # Presentation
@@ -885,7 +915,11 @@ def generate_all_start_end_combinations(N, L):
         
         # Generar todas las permutaciones de L nodos para endNodes (IMPORTA el orden)
         for end_perm in itertools.permutations(remaining_nodes, L):
-            valid_combinations.append((np.array(start_comb), np.array(end_perm)))
+            for i in range(L):
+                if start_comb[i] >= end_perm[i]:
+                    break
+                else:
+                    valid_combinations.append((np.array(start_comb), np.array(end_perm)))
 
     return valid_combinations
 
@@ -939,4 +973,6 @@ def draw_multiple_solutions_graph(solutions_list, distances, p, startNodes, endN
             nx.draw_networkx_edges(G, edge_pos, edgelist=[edge], edge_color=[color], width=2)
 
     plt.title("Complete bus route lines")
+
+
 
