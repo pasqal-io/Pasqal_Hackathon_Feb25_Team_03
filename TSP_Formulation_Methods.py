@@ -6,6 +6,7 @@ from scipy.optimize import minimize
 from neal import SimulatedAnnealingSampler
 from dimod import BinaryQuadraticModel
 import itertools
+import glob
 
 """
 Methods to create the QUBO matrix for using it in Pulser with the Traveling Salesman Problem representation.
@@ -62,7 +63,8 @@ def create_QUBO_matrix(distances, p, startNode: Optional[int] = 0, endNode: Opti
 
     # Cost funtion for the route: distances
 
-    Q += convertCostMatrixToQUBORepresentation(distances, p)
+    distances_symmetric = (distances + distances.T) / 2
+    Q += convertCostMatrixToQUBORepresentation(distances_symmetric, p)
 
     Q = Q + Q.T
 
@@ -602,6 +604,23 @@ def count_most_violated_constraints(solutions_zipped, N, p, startNode, endNode, 
     for j in range(len(constraints)):
         constraints[j] = constraints[j] / plotRange
     return constraints
+
+
+def load_lambda_means(concrete_simulations):
+    """
+    Carga los pesos lambda desde archivos, calcula su media y devuelve la lista de medias.
+    """
+    files_to_find = f"./data/lamdasOptimized/{concrete_simulations}*"
+    files = glob.glob(files_to_find)
+
+    all_weights = [np.loadtxt(file) for file in files]
+
+    if not all_weights:
+        return []  # Retorna lista vacía si no hay datos
+
+    all_weights = np.array(all_weights)  # Shape: (num_files, 5)
+
+    return np.mean(all_weights, axis=0).tolist() 
 
 
 # Presentation
