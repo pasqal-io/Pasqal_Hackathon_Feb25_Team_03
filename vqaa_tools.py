@@ -175,7 +175,10 @@ def define_sequence_qaa(register, Q, omega, delta, T=4000, device = DigitalAnalo
     sequence.declare_channel("rydberg_global", "rydberg_global")
 
     node_weights = np.diag(Q)
-    norm_node_weights = node_weights/np.min(node_weights) # we use the min for normalisation since the diagonal values are negative
+    try: 
+        norm_node_weights = node_weights/np.min(node_weights) # we use the min for normalisation since the diagonal values are negative
+    except:
+        print(node_weights)
     det_map_weights = 1 - norm_node_weights
 
 
@@ -256,26 +259,27 @@ def func_simple(parameters, *args):
     """Function to get the cost of a run in QAA with certain parameters"""
     Q = args[0][0]
     register = args[0][1]
+    Cs = args[0][2]
     C = simple_quantum_loop(Q, register, parameters)
+    Cs[0] = C
     cost = agg_cost(C, Q)
-
     return cost
 
 def run_vqaa(Q, register):
     """Run the VQAA and return the optimal solutions"""
     x0 = np.random.uniform(0, 10, 2)
+    Cs = [-1]
     res = minimize(
         func_simple,
         x0,
-        args=[Q, register],
+        args=[Q, register, Cs],
         method="Nelder-Mead",
         tol=1e-6,
-        options={"maxiter": 5, "maxfev": None}
+        options={"maxiter": 3, "maxfev": 2} 
     )
 
     x_opt = res.x
-
-    return simple_quantum_loop(x_opt, register, Q), x_opt
+    return Cs[0], x_opt
 
 
 
