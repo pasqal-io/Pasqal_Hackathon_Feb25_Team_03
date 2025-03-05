@@ -222,7 +222,6 @@ class linkageCut:
         """Returns the distance matrix for all center clusters in a given level"""
         centers_obj = self.give_centers_level(level)
         dist_matrix = self.__OSRM_query(centers_obj)
-        dist_matrix += dist_matrix.T
         ind_labels = np.array(range(1, len(centers_obj) + 1))
 
         if return_labels:
