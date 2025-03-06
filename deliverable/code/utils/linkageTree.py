@@ -271,7 +271,9 @@ class linkageCut:
             dist_matrix = self.dist_matrix[level]
         if return_labels:
             labels = [str(x) for x in np.arange(1, self.nclusters + 1)]
-            labels = sorted([int(x) for x in ["".join(x) for x in list(product(*[labels for _ in range(level)]))]])
+
+            if level > 0:
+                labels = sorted([int(x) for x in ["".join(x) for x in list(product(*[labels for _ in range(level)]))]])
             return dist_matrix, labels
         else:
             return dist_matrix
@@ -303,21 +305,22 @@ class linkageCut:
         """
         level = len(str(int(label))) - 1
 
-        myself_indexes = self.top_down[:, level] == label
-        if len(connections) == 0:
-            dist_matrix, labels = self.dist_matrix_level(level)
-            dist_matrix = dist_matrix[myself_indexes, :][:, myself_indexes]
-        else:
+        dist_matrix, labels = self.dist_matrix_level(level + 1)
+        # Get all clusters one level down from the given label, e.g, 1 -> 11, 12, 13,...
+        # e.g, 11 -> 111, 112, ...
+        print(labels)
+        label_filter = np.asarray([str(x).startswith(str(label)) for x in labels])
+        print(label_filter)
+
+        if len(connections) != 0:
             indices = []
-            dist_matrix, labels = self.dist_matrix_level(level)
             symm_matrix = dist_matrix.copy()
             symm_matrix += symm_matrix.T
 
             # Calculate the centers in normalized space and return to lon-lat
-            from_indexes = self.top_down[:, level] == connections[0]
-            from_indexes
+            from_indexes = np.asarray([str(x).startswith(str(connections[0])) for x in labels])
 
-            dist_indx_1 = np.concatenate([myself_indexes, from_indexes])
+            dist_indx_1 = (label_filter) | (from_indexes)
 
             min_dist_indx_1 = np.unravel_index(
                 np.argmin(symm_matrix[dist_indx_1, :][:, dist_indx_1]),
@@ -326,15 +329,15 @@ class linkageCut:
             indices.append(min_dist_indx_1)
             if len(connections) == 2:
                 # Calculate the centers in normalized space and return to lon-lat
-                to_indexes = self.top_down[:, level] == connections[1]
-                dist_indx_2 = np.concatenate([myself_indexes, to_indexes])
+                to_indexes = np.asarray([str(x).startswith(str(connections[1])) for x in labels])
+                dist_indx_1 = (label_filter) | (to_indexes)
                 min_dist_indx_2 = np.unravel_index(
                     np.argmin(symm_matrix[dist_indx_2, :][:, dist_indx_2]),
                     symm_matrix.shape,
                 )[0]
                 indices.append(min_dist_indx_2)
 
-        dist_matrix = dist_matrix[myself_indexes, :][:, myself_indexes]
+        dist_matrix = dist_matrix[label_filter, :][:, label_filter]
         if return_labels:
             ind_labels = np.array(range(1, len(dist_matrix) + 1))
             ind_labels += 10 * label  # Adding prefix to label
