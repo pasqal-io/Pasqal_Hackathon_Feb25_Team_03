@@ -7,22 +7,25 @@ import networkx as nx
 import numpy as np
 from dimod import BinaryQuadraticModel
 from neal import SimulatedAnnealingSampler
-from scipy.optimize import minimize
 
 """
-Methods to create the QUBO matrix for using it in Pulser with the Traveling Salesman Problem representation.
+Methods to create the QUBO matrix for using it in Pulser with the Traveling Salesman Problem formulation.
+The representation is called TS Bus Line Problem
 
-- The distances are no symmetric, we use a non symmetric cost matrix.
-- N is the number of stops. p is the number of travels in the route. R = N(p+1) is the number of variables.
+- The distances are assumed to be symmetric. The cost matrix is symmetrized before creating the QUBO matrix.
+- N is the number of stops. p is the number of travels in the route. R = N(p+1) is the number of binary variables.
 - We consider just one line which has an start (stop i), and end (stop j) and p travels in the route.
+- To introtuce more lines, we can use the methods iteratively and check gloval constraints.
 
-Thera are two levels of representation:
+There are two levels of representation:
 
 - QUBO variables: y_k, k=0,1,...,R-1 and matrices with shape (R,R).
   The distances are stored in an N x N matrix which is used several times.
 - Stops representation: n_i, i=0,1,...,N-1. Graph representation of the stops.
 
 """
+
+
 # QUBO matrix creation
 
 
@@ -35,7 +38,7 @@ def create_QUBO_matrix(
     constraints_activations: list[bool] | None = None,
 ) -> tuple[np.array, list[float]]:
     """
-    Creation of Q matrix for the bus lines problem using TSP representation.
+    Creation of Q matrix for the bus lines problem using TS Bus Line Problem representation
 
     Parameters
     ----------
@@ -47,6 +50,10 @@ def create_QUBO_matrix(
         Index of the start stop.
     endNode : int
         Index of the end stop.
+    list_of_lambdas : list
+        List of lambdas (weights) for the constraints. Default is None.
+    constraints_activations : list
+        List of booleans to activate or deactivate the constraints. Default is None.
 
     Returns
     -------
@@ -67,7 +74,7 @@ def create_QUBO_matrix(
     if constraints_activations is None:
         constraints_activations = [True for i in range(5)]
 
-    # Cost funtion for the route: distances
+    # Cost funtion for the route: distances symmetrizated
 
     distances_symmetric = (distances + distances.T) / 2
     Q += convertCostMatrixToQUBORepresentation(distances_symmetric, p)
@@ -198,12 +205,12 @@ def is_symmetric(matrix, tol=1e-8):
 
 def convertCostMatrixToQUBORepresentation(distances: np.ndarray, p: int) -> np.ndarray:
     """
-    Convert the cost matrix to the QUBO representation.
+    Convert the cost matrix (given as an adjacency matrix) to the QUBO representation.
 
     Parameters
     ----------
     distances : np.array
-        Matrix with the distances between the stops. It is not symmetric. Is has shape (N,N).
+        Matrix with the distances between the stops. Is has shape (N,N).
     p : int
         Number of travels in the route.
 
@@ -236,6 +243,17 @@ def calculate_cost(solution_array, Q_matrix):
     return solution_array.T @ Q_matrix @ solution_array
 
 
+def calculate_distances_cost(solution_array, distances, p):
+    """
+    Calculate the distances cost of a solution.
+    The distances matrix is not in the QUBO representation.
+    The cost is calculated as a one-way route.
+    """
+
+    distances_QUBO = convertCostMatrixToQUBORepresentation(distances, p)
+    return calculate_cost(solution_array, distances_QUBO)
+
+
 def invert_solution_direction(solution_array, N, p):
     """
     Invert the direction of the route in a solution.
@@ -263,19 +281,10 @@ def invert_solution_direction(solution_array, N, p):
     return inverted_solution
 
 
-def calculate_distances_cost(solution_array, distances, p):
-    """
-    Calculate the distances cost of a solution.
-    """
-
-    distances_QUBO = convertCostMatrixToQUBORepresentation(distances, p)
-    return calculate_cost(solution_array, distances_QUBO)
-
-
 def calculate_distances_cost_of_bidireccional_routes(solution_array, distances, p):
     """
     Calculate the distances cost of a solution considering bidireccional routes
-    It assumes that the distances_QUBO matrix is in the QUBO representation.
+    The distances matrix is not in the QUBO representation.
     """
     N = distances.shape[0]
     distances_QUBO = convertCostMatrixToQUBORepresentation(distances, p)
@@ -289,7 +298,7 @@ def calculate_distances_cost_of_bidireccional_routes(solution_array, distances, 
 
 def check_solution(solution_array, N, p, startNode, endNode) -> None:
     """
-    Check the constraints of the solution.
+    Check the constraints of the solution and print the violated constraints.
     """
 
     endNode = N * p + endNode
@@ -307,6 +316,9 @@ def check_solution(solution_array, N, p, startNode, endNode) -> None:
 
 
 def check_solution_return(solution_array, N, p, startNode, endNode) -> bool:
+    """
+    Check the constraints of the solution and return True if all constraints are fulfilled.
+    """
     endNode = N * p + endNode
 
     if not check_constraint_1(solution_array, N, p):
@@ -358,7 +370,8 @@ def check_constraint_5(solution_array, endNode):
         return False
     return True
 
-    # Solve QUBO
+
+# Solve QUBO
 
 
 def generate_valid_initial_solution(N, p, startNode, endNode):
@@ -427,86 +440,6 @@ def brute_force_finding(Q_matrix, distances_matrix, p, bidirectional=True):
 # Optimization
 
 
-def optimize_lambdas_given_solution(
-    distances,
-    p,
-    startNode=0,
-    endNode=None,
-    methodIndex=2,
-    initial_solution=None,
-    initial_lambdas=None,
-):
-    """
-    Optimize the lambdas for the QUBO matrix with adaptive balancing between cost and constraints.
-    It reduces the cost of a given solution.
-
-    Parameters
-    ----------
-    distances : np.array
-        Matrix with the distances between the stops. It is not symmetric. Has shape (N,N).
-    p : int
-        Number of travels in the route.
-    startNode : int
-        Index of the start stop.
-    endNode : int
-        Index of the end stop.
-    method : str
-        Optimization method from scipy.optimize.minimize. Default is "L-BFGS-B".
-    initial_solution : np.array
-        Initial solution to use for the optimization.
-    initial_lambdas : np.array
-        Initial values for the lambdas.
-    bidireccionality : bool
-        If True, the cost function considers bidirectional routes.
-
-    Returns
-    -------
-    lambdas : np.array
-        Optimized lambdas for the initial tentative solution.
-    """
-    N = distances.shape[0]
-    if endNode is None:
-        endNode = N - 1
-
-    methods = [
-        "Nelder-Mead",  # Algoritmo simplex (no requiere derivadas)
-        "Powell",  # Algoritmo de búsqueda direccional (sin derivadas)
-        "L-BFGS-B",  # Variante limitada de BFGS (acepta restricciones de caja)
-        "TNC",  # Algoritmo de Newton truncado (adecuado para problemas grandes)
-        "COBYLA",  # Optimización secuencial por aproximaciones cuadráticas
-        "SLSQP",  # Programación cuadrática secuencial
-    ]
-
-    method = methods[methodIndex]
-
-    def cost_function(lambdas):
-
-        # Create the QUBO matrix
-        Q, _ = create_QUBO_matrix(distances, p, startNode, endNode, lambdas)
-
-        # Generate a valid initial solution
-        if initial_solution is not None:
-            solution_guess = initial_solution
-        else:
-            solution_guess = generate_valid_initial_solution(N, p, startNode, endNode)
-        cost = calculate_cost(solution_guess, Q)
-
-        # Adaptive penalty based on the violation level
-        penalty = 0
-        if not check_solution_return(solution_guess, N, p, startNode, endNode):
-            penalty = 10 * abs(cost)  # Adaptive penalty proportional to cost
-
-        return cost + penalty
-
-    if initial_lambdas is not None:
-        lambdas_init = initial_lambdas
-    else:
-        lambdas_init = np.ones(5) * 0.1 * max(distances)  # Start with small lambda values
-    res = minimize(cost_function, lambdas_init, method=method, bounds=[(0, 10)] * 5)
-
-    return res.x
-
-
 def calculate_upper_bound_distances(distances, p):
     """
     For a solution with all the stops activated in all time steps,
@@ -518,111 +451,55 @@ def calculate_upper_bound_distances(distances, p):
     return maxArray.T @ distances_QUBO_t @ maxArray
 
 
-def update_lambdas(lambdas, scaling_factor, solution, N, p, startNode, endNode):
+def optimize_lambdas(distances, p, startNode, endNode, iterations=10, best_solution_number=30):
     """
-    For a given solution, it scales the lambdas based on the constraints that are not fulfilled.
-
-    Parameters
-    ----------
-
-    lambdas : np.array
-        Array with the lambdas.
-    scaling_factor : float
-        Scaling factor for the lambdas.
-    solution : np.array
-        Solution in the QUBO representation.
-    N : int
-        Number of stops.
-    p : int
-        Number of travels in the route.
-
-    Returns
-    -------
-    lambdas_updated : np.array
-        Updated lambdas.
-    """
-    lambdas_updated = []
-    endNode = N * p + endNode
-    for i in range(len(lambdas)):
-        sum = lambdas[i]
-        if i == 0:
-            if not check_constraint_1(solution, N, p):
-                sum = sum + scaling_factor
-        elif i == 1:
-            if not check_constraint_2(solution, N, p):
-                sum = sum + scaling_factor
-        elif i == 2:
-            if not check_constraint_3(solution, N, p):
-                sum = sum + scaling_factor
-        elif i == 3:
-            if not check_constraint_4(solution, startNode):
-                sum = sum + scaling_factor
-        elif i == 4:
-            if not check_constraint_5(solution, endNode):
-                sum = sum + scaling_factor
-        lambdas_updated.append(sum)
-
-    return lambdas_updated
-
-
-def find_optimized_solution(
-    distances,
-    p,
-    N,
-    startNode,
-    endNode,
-    scaling_factor,
-    max_iterations,
-    num_reads_solver,
-    initial_lambdas=None,
-):
-    """
-    For given distances, travels, start and end nodes, it finds the optimized solution based
-    on the iteration over the funcion update lambdas
-    and solving the QUBO with DWave annealer.
+    For a given distances matrix, given the number of travels p, the start stop and the end stop,
+    it optimizes the lambdas. The algotithm starts with an stimated lambdas, computes the QUBO
+    matrix and find all the bitstrings combinations.
+    For the first 'best_solution_number' combinations it calculates which constraints are violated
+    and updates the lambdas proportionally.
 
     Parameters
     ----------
     distances : np.array
-        Matrix (NxN) with the distances between the stops. It is not symmetric.
+        Matrix with the distances between the stops. Is has shape (N,N).
     p : int
         Number of travels in the route.
-    N : int
-        Number of stops.
     startNode : int
         Index of the start stop.
     endNode : int
         Index of the end stop.
-    scaling_factor : float
-        Scaling factor for the lambdas.
-    max_iterations : int
-        Maximum number of iterations.
-    num_reads_solver : int
-        Number of reads for the DWave annealer.
+    iterations : int
+        Number of iterations.
+    best_solution_number : int
+        Number of best solutions to consider.
 
     Returns
     -------
-    solution : np.array
-        Optimized solution in the QUBO representation.
+    Q : np.array
+        QUBO matrix.
+    lambdas : np.array
+        Array with the optimized lambdas.
+    solutions_zipped : list
+        List with the bitstrings, costs and distances of all combinations.
     """
-    if initial_lambdas is not None:
-        lambdas = initial_lambdas
-    else:
-        lambdas = [
-            0.01 * calculate_upper_bound_distances(distances, p) for _ in range(5)
-        ]  # Start and end nodes are not penalized in the beggining as the have negative penalties
-    Q_matrix, _ = create_QUBO_matrix(distances, p, startNode, endNode, lambdas)
-    solution, _ = solve_qubo_with_Dwave(Q_matrix, num_reads=num_reads_solver)
-    if check_solution_return(solution, N, p, startNode, endNode):
-        return solution, lambdas
-    else:
-        for i in range(max_iterations):
-            lambdas = update_lambdas(lambdas, scaling_factor, solution, N, p, startNode, endNode)
-            Q_matrix, _ = create_QUBO_matrix(distances, p, startNode, endNode, lambdas)
-            solution, _ = solve_qubo_with_Dwave(Q_matrix, num_reads=num_reads_solver)
-            if check_solution_return(solution, N, p, startNode, endNode):
-                return solution, lambdas
-        return solution, lambdas
+
+    initial_lambdas = np.array([0.01 * calculate_upper_bound_distances(distances, p) for i in range(5)])
+    for i in range(iterations):
+        Q, lambdas = create_QUBO_matrix(distances, p, startNode, endNode, initial_lambdas)
+        solutions_zipped = brute_force_finding(Q, distances, p)
+        violation_of_constraints = count_most_violated_constraints(
+            solutions_zipped,
+            distances.shape[0],
+            p,
+            startNode,
+            endNode,
+            best_solution_number,
+        )
+        if i < iterations - 1:
+            initial_lambdas = [lambdas[i] + violation_of_constraints[i] for i in range(5)]
+
+    return Q, initial_lambdas, solutions_zipped
 
 
 def count_most_violated_constraints(solutions_zipped, N, p, startNode, endNode, plotRange=20):
@@ -649,7 +526,7 @@ def count_most_violated_constraints(solutions_zipped, N, p, startNode, endNode, 
 
 def load_lambda_means(files):
     """
-    Carga los pesos lambda desde archivos, calcula su media y devuelve la lista de medias.
+    Compute the mean of the lambdas from a list of files.
     """
     all_weights = [np.loadtxt(file) for file in files]
     if not all_weights:
@@ -662,7 +539,7 @@ def load_lambda_means(files):
 
 def show_statistics_lambdas(solutions_analysis_array):
     """
-    Show, for a given set of complete combinations of solutions, the statistics of the lambdas.
+    Show, for a given set of combinations of solutions, the statistics of the lambdas.
     """
 
     longitude = solutions_analysis_array.shape[0]
@@ -698,7 +575,7 @@ def show_statistics_lambdas(solutions_analysis_array):
 
 def draw_solution_graph(solution_array, distances, p, startNode, endNode):
     """
-    Draw the graph of the solution.
+    Draw the graph of the solution for a single line
     """
 
     N = distances.shape[0]
@@ -893,7 +770,7 @@ def check_multiline_validity(list_of_solutions, N, p, startNodes, endNodes, num_
             if returnFormat:
                 return False
             else:
-                print(f"Solution {l} is not valid.")
+                print(f"Local constraint: solution {l} is not valid.")
                 return None
 
     # Global constraint: All stops are visited
@@ -908,7 +785,7 @@ def check_multiline_validity(list_of_solutions, N, p, startNodes, endNodes, num_
             if returnFormat:
                 return False
             else:
-                print(f"Stop {i} is not visited.")
+                print(f"Global Constraint: stop {i} is not visited.")
                 return None
 
     if returnFormat:
@@ -933,35 +810,38 @@ def distance_cost_of_multilines(list_of_solutions, distances, p, bidirectional=T
     return total_cost
 
 
-def generate_all_start_end_combinations(N, L):
+def generate_all_start_end_combinations(N, L, symmetric=True):
     """
-    Genera todas las combinaciones posibles de startNodes y endNodes cumpliendo:
-    - startNodes[i] ≠ startNodes[j] (todos distintos)
-    - endNodes[i] ≠ endNodes[j] (todos distintos)
-    - startNodes[i] ≠ endNodes[j] (no pueden repetirse en ambos)
-    - Se eliminan duplicados donde (startNodes, endNodes) es equivalente a (endNodes, startNodes)
+    Generates all possible combinations of startNodes and endNodes satisfying:
+    - startNodes[i] ≠ startNodes[j] (all distinct)
+    - endNodes[i] ≠ endNodes[j] (all distinct)
+    - startNodes[i] ≠ endNodes[j] (cannot be repeated in both)
+    - If symmetric = True: Duplicates where (startNodes, endNodes) are equivalent to (endNodes, startNodes) are removed.
 
-    Parámetros:
-    - N: Número total de nodos disponibles (valores entre 0 y N-1).
-    - L: Número de líneas (longitud de los arrays).
+    Parameters:
+    - N: Total number of available nodes (values between 0 and N-1).
+    - L: Number of lines (length of the arrays).
 
-    Retorna:
-    - Lista de tuplas (startNodes, endNodes) con todas las combinaciones válidas.
+    Returns:
+    - List of tuples (startNodes, endNodes) with all valid combinations for the given number of lines.
     """
     nodes = list(range(N))
     valid_combinations = []
 
-    # Generar todas las combinaciones posibles de L nodos distintos para startNodes (SIN importar orden)
+    # Generate all possible combinations of L distinct nodes for startNodes (ORDER DOES NOT MATTER)
     for start_comb in itertools.combinations(nodes, L):
         remaining_nodes = set(nodes) - set(start_comb)
 
-        # Generar todas las permutaciones de L nodos para endNodes (IMPORTA el orden)
+        # Generate all permutations of L nodes for endNodes (ORDER MATTERS)
         for end_perm in itertools.permutations(remaining_nodes, L):
-            for i in range(L):
-                if start_comb[i] >= end_perm[i]:
-                    break
-                else:
-                    valid_combinations.append((np.array(start_comb), np.array(end_perm)))
+            if not symmetric:
+                valid_combinations.append((np.array(start_comb), np.array(end_perm)))
+            else:
+                for i in range(L):
+                    if start_comb[i] >= end_perm[i]:
+                        break
+                    else:
+                        valid_combinations.append((np.array(start_comb), np.array(end_perm)))
 
     return valid_combinations
 
