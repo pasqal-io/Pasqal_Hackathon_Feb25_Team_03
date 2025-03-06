@@ -272,22 +272,28 @@ class linkageCut:
         else:
             return dist_matrix
 
-    def dist_matrix_label_down(self, label, connections=[], return_labels=True):
-        """Returns the distance matrix of a single cluster divided under a certain level
+    def dist_matrix_label_down(
+        self,
+        label,
+        connections=[],
+        return_labels=True,
+    ):
+        """
+        Returns the distance matrix of a single cluster divided under a certain level
         given by the label returned by top_down_view_recur, with the
         connected nodes (if there are any), in the first and last position of the array.
         The connections must be the other clusters connected in the upper level.
 
         Cases
-        (i) No assumptions about higher level connection (connected_clusters=None). Returns the distance array
+        - (i) No assumptions about higher level connection (connected_clusters=None). Returns the distance array
         without any particular ordering
-        (ii) Only one element in connected_cluster. It is placed in the first index of the distance array
-        (iii) Two elements in connected_cluster. They are placed in the first and last indices of the distance array
+        - (ii) Only one element in connected_cluster. It is placed in the first index of the distance array
+        - (iii) Two elements in connected_cluster. They are placed in the first and last indices of the distance array
 
-        Examples:
-
-        dist_array(1, connections = [2,3]) would assign the closest stops from 1 (from 11, 12, ...) to
-        2 and 3 (21,22,23... and 31,32,33...) as first and last stops to ensure a smooth 2-1-3 route.
+        >>> # To assign the closest nodes from 1 (11, 12, ...)
+        >>> # To the connected nodes 2 and 3 (21,22,23... and 31,32,33...)
+        >>> # As first and last stops to ensure a smooth 2-1-3 route.
+        >>> dist_array(1, connections = [2,3])
 
         :return:
         """
@@ -296,10 +302,11 @@ class linkageCut:
         ind_labels = np.array(range(1, len(clusters_obj) + 1))
 
         if len(connections) == 0:
-            return None
+            self.dist_matrix_level(label)
         else:
             clusters_conn_1 = self.give_centers_label_down(connections[0])
             coords_obj1 = np.append(clusters_obj, clusters_conn_1, axis=0)
+            # NOTE: Maybe know that we cache stuff, we could fetch the information instantly if in already in memory?
             ins = range(len(clusters_obj))
             outs = range(len(clusters_obj), len(clusters_obj) + len(clusters_conn_1))
 
@@ -337,7 +344,6 @@ class linkageCut:
                 )[0]
 
                 # Swaping places
-
                 ind_labels[[min_dist_indx_2, -1]] = ind_labels[[-1, min_dist_indx_2]]
                 clusters_obj[[min_dist_indx_2, -1]] = clusters_obj[[-1, min_dist_indx_2]]
 
@@ -347,8 +353,6 @@ class linkageCut:
             clusters_obj[[min_dist_indx_1, 0]] = clusters_obj[[0, min_dist_indx_1]]
 
         dist_matrix = self.__osrm_query(clusters_obj)
-        dist_matrix += dist_matrix.T
-
         ind_labels += 10 * label  # Adding prefix to label
         if return_labels:
             return dist_matrix, ind_labels

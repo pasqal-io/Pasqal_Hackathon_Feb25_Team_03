@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import folium
-import matplotlib.pyplot as plt
 import numpy as np
 import overpy
 import pandas as pd
@@ -153,12 +152,33 @@ def view_linkage_on_map(
     :param colors: List of colors for each level.
     """
     if not colors:
-        colors = plt.color_sequences("Set1")
+        # Folium.Icon allowed colors
+        colors = [
+            "red",
+            "blue",
+            "green",
+            "purple",
+            "orange",
+            "darkred",
+            "lightred",
+            "beige",
+            "darkblue",
+            "darkgreen",
+            "cadetblue",
+            "darkpurple",
+            "white",
+            "pink",
+            "lightblue",
+            "lightgreen",
+            "gray",
+            "black",
+            "lightgray",
+        ]
         if levels > len(colors):
             raise ValueError('You must specify the colors list if the number of levels > plt.color_sequences("Set1")')
     map = None
     for level in range(levels):
-        centers = linkage_matrix.give_centers_level(0)
+        centers = linkage_matrix.give_centers_level(level)
         map = draw_centers_on_map(centers, color=colors[level], map=map)
     return map
 
