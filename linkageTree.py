@@ -1,10 +1,14 @@
-import requests
+from __future__ import annotations
+
+from collections.abc import Iterable
+
 import numpy as np
+import pandas as pd
+import requests
+from scipy.cluster.hierarchy import cut_tree
+from scipy.cluster.hierarchy import linkage
 from sklearn.metrics.pairwise import euclidean_distances
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics.pairwise import euclidean_distances
-from scipy.cluster.hierarchy import linkage, cut_tree
 
 
 class linkageCut:
@@ -32,8 +36,9 @@ class linkageCut:
     >>> plt.show()
     """
 
-    def __init__(self, df):
+    def __init__(self, df: pd.DataFrame, max_cache: int = 10):
         self.scaler = MinMaxScaler()
+        # NOTE: Might be interesting to see if we can avoid this named columns
         self.data = self.scaler.fit_transform(df[["lon", "lat"]].values)
         self.data_lon_lat = df[["lon", "lat"]].values
         self.linkage_matrix = linkage(self.data, method="ward")
@@ -42,15 +47,30 @@ class linkageCut:
         self.top_down = None
         self.distance_matrix = None
         self.nclusters = None
+        self.dist_matrix = {}
+        self.__dist_keys = []
+        self.max_cache = max_cache
 
     def give_tree_cut(self):
+        """Returns the result of scipy.cluster.hierarchy.cut_tree method"""
         return self.tree_cut
 
-    def __nunique(self, a, axis):
-        """Count the number of unique elements in an array and axis"""
+    def __nunique(self, a: np.ndarray, axis: int):
+        """
+        Count the number of unique elements in an array and axis
+        :param a: array of values
+        :param axis: axis of unique values
+        """
         return (np.diff(np.sort(a, axis=axis), axis=axis) != 0).sum(axis=axis) + 1
 
-    def __recursive_down(self, nclusters, level, total_levels, mask):
+    def __recursive_down(self, nclusters: int, level: int, total_levels: int, mask: np.ndarray):
+        """
+        Instantiates attributes for other methods by transversing the tree for total_levels and reading results
+        :param nclusters: Amount of clusters per level
+        :param levels: Actual level of the the recursive function
+        :param total_levels: Number of levels to tranverse
+        :param mask: np.ndarray to filter the tree_cut data structure
+        """
         if len(str(level)) < total_levels:
 
             # Selecting specific parent cluster
@@ -63,10 +83,9 @@ class linkageCut:
             try:
                 # This is the step where there are exactly nclusters subclusters
                 sub_tree_step = np.where(small_tree_nclusters == nclusters)[0][-1]
-            except:
-                raise Exception("Some cluster cannot be further divided")
+            except IndexError:
+                raise ValueError("Some cluster cannot be further divided")
             # Now we truly have the subdivision
-
             counter = 1
             for sub_lbl in np.unique(small_tree[:, sub_tree_step]):
                 # Now we prepare the mask for each subcluster and the recursion
@@ -77,17 +96,17 @@ class linkageCut:
                     total_levels,
                     sub_data_mask,
                 )
-                if write == None:
+                if not write:
                     write = str(level) + str(counter)
                 self.top_down[sub_data_mask, len(str(level))] = int(write)
                 counter += 1
-
             return None
         else:
             return level
 
-    def top_down_view_recur(self, nclusters, levels=1):
-        """Constructs a top down view in which each cluster is
+    def top_down_view_recur(self, nclusters: int, levels: int = 1):
+        """
+        Constructs a top down view in which each cluster is
         subsequently divided in 'nclusters'. This process
         is iterated 'level' times.
         In each step, all data is labelled accordingly.
@@ -100,8 +119,8 @@ class linkageCut:
         Obviously, the maximum nclusters is 9 for our proof of concept, for larger values,
         char implementations should be considered
 
-        :input nclusters: number of clusters per level
-        :input levels: number of layers or levels
+        :param nclusters: number of clusters per level
+        :param levels: number of layers or levels
         :return: (len_data)X(level) matrix with labels
         """
         self.nclusters = nclusters
@@ -124,11 +143,14 @@ class linkageCut:
 
         return self.top_down
 
-    def give_center_label(self, label):
-        """Returns the positions in lon-lat space of the centers with a given label.
+    def give_center_label(self, label: int):
+        """
+        Returns the positions in lon-lat space of the centers with a given label.
 
-        Examples:
-        give_centers_label(11) returns the centroid "11"
+        >>> give_centers_label(11) # returns the centroid "11"
+
+        :param label: label to filter the data
+        :return: centroid for points belonging to cluster (label)
         """
         level = len(str(int(label))) - 1
         sub_top_down = self.top_down[:, level]
@@ -138,16 +160,19 @@ class linkageCut:
         # Find the closest location
         center = self.data[cluster_mask][
             np.argmin(
-                euclidean_distances(self.data[cluster_mask], center.reshape(1, -1))
+                euclidean_distances(self.data[cluster_mask], center.reshape(1, -1)),
             )
         ]
 
         return center
 
     def give_centers_level(self, level):
-        """Return the possible location closer to the cluster centroid in a certain level"""
+        """
+        Return the possible location closer to the cluster centroid in a certain level
+        :param level: Level of the hierarchy with points
+        """
 
-        if type(self.top_down) != np.ndarray:
+        if not isinstance(self.top_down, np.ndarray):
             raise StopIteration("You must first execute top_down_view_recur first")
         else:
             if level > self.top_down.shape[1]:
@@ -165,11 +190,12 @@ class linkageCut:
             return centers
 
     def give_centers_label_down(self, label):
-        """Return the centers locations from a label down in order: 11, 12, 13, 14
-        Example: give_centers_label_down(2) returns the position of stops corresponding to 21, 22, 23,...
+        """
+        Return the centers locations from a label down in order: 11, 12, 13, 14
+        >>> give_centers_label_down(2) # returns the position of stops corresponding to 21, 22, 23,...
         """
         level = len(str(int(label))) - 1
-        if type(self.top_down) != np.ndarray:
+        if not isinstance(self.top_down, np.ndarray):
             raise StopIteration("You must first execute top_down_view_recur first")
         else:
             if level > self.top_down.shape[1]:
@@ -189,7 +215,13 @@ class linkageCut:
                 centers = self.scaler.inverse_transform(centers)
             return centers
 
-    def __OSRM_query(self, coords, sources=None, destinations=None):
+    def __osrm_query(self, coords: np.ndarray, sources: Iterable | None = None, destinations: Iterable | None = None):
+        """
+        This functions calls osrm project to fetch the driving distance between stops
+        :param coords: Coordenates of the clusters points (lon, lat)
+        :param sources: Index of sources
+        :param destinations: Index of destinations
+        """
         url = "http://router.project-osrm.org/table/v1/driving/"
         routes = ""
 
@@ -199,15 +231,15 @@ class linkageCut:
         routes = routes[:-1]
         dir_query = url + routes + "?annotations=distance"
 
-        if (sources == None) & (destinations == None):
+        if (not sources) & (not destinations):
             pass
         else:
-            if sources != None:
+            if sources:
                 dir_query += "&sources="
                 for indx in sources:
                     dir_query += str(indx) + ";"
                 dir_query = dir_query[:-1]
-            if destinations != None:
+            if destinations:
                 dir_query += "&destinations="
                 for indx in destinations:
                     dir_query += str(indx) + ";"
@@ -219,32 +251,49 @@ class linkageCut:
         return dist_matrix
 
     def dist_matrix_level(self, level, return_labels=True):
-        """Returns the distance matrix for all center clusters in a given level"""
-        centers_obj = self.give_centers_level(level)
-        dist_matrix = self.__OSRM_query(centers_obj)
-        ind_labels = np.array(range(1, len(centers_obj) + 1))
-
+        """
+        Returns the distance matrix for all center clusters in a given level
+        :param level: Level of the hierarchy
+        :param return_labels: Flag to return the dist_matrix and labels.
+        """
+        if not self.dist_matrix or level not in self.__dist_keys:
+            centers_obj = self.give_centers_level(level)
+            dist_matrix = self.__osrm_query(centers_obj)
+            self.dist_matrix[level] = dist_matrix
+            self.__dist_keys.append(level)
+            if len(self.__dist_keys) > self.max_cache:
+                __oldest_level = self.dist_matrix.pop()
+                self.dist_matrix.pop(__oldest_level, None)
+            ind_labels = np.array(range(1, len(centers_obj) + 1))
+        else:
+            dist_matrix = self.dist_matrix[level]
         if return_labels:
             return dist_matrix, ind_labels
         else:
             return dist_matrix
 
-    def dist_matrix_label_down(self, label, connections=[], return_labels=True):
-        """Returns the distance matrix of a single cluster divided under a certain level
+    def dist_matrix_label_down(
+        self,
+        label,
+        connections=[],
+        return_labels=True,
+    ):
+        """
+        Returns the distance matrix of a single cluster divided under a certain level
         given by the label returned by top_down_view_recur, with the
         connected nodes (if there are any), in the first and last position of the array.
         The connections must be the other clusters connected in the upper level.
 
         Cases
-        (i) No assumptions about higher level connection (connected_clusters=None). Returns the distance array
+        - (i) No assumptions about higher level connection (connected_clusters=None). Returns the distance array
         without any particular ordering
-        (ii) Only one element in connected_cluster. It is placed in the first index of the distance array
-        (iii) Two elements in connected_cluster. They are placed in the first and last indices of the distance array
+        - (ii) Only one element in connected_cluster. It is placed in the first index of the distance array
+        - (iii) Two elements in connected_cluster. They are placed in the first and last indices of the distance array
 
-        Examples:
-
-        dist_array(1, connections = [2,3]) would assign the closest stops from 1 (from 11, 12, ...) to
-        2 and 3 (21,22,23... and 31,32,33...) as first and last stops to ensure a smooth 2-1-3 route.
+        >>> # To assign the closest nodes from 1 (11, 12, ...)
+        >>> # To the connected nodes 2 and 3 (21,22,23... and 31,32,33...)
+        >>> # As first and last stops to ensure a smooth 2-1-3 route.
+        >>> dist_array(1, connections = [2,3])
 
         :return:
         """
@@ -253,17 +302,20 @@ class linkageCut:
         ind_labels = np.array(range(1, len(clusters_obj) + 1))
 
         if len(connections) == 0:
-            return None
+            self.dist_matrix_level(label)
         else:
             clusters_conn_1 = self.give_centers_label_down(connections[0])
             coords_obj1 = np.append(clusters_obj, clusters_conn_1, axis=0)
+            # NOTE: Maybe know that we cache stuff, we could fetch the information instantly if in already in memory?
             ins = range(len(clusters_obj))
             outs = range(len(clusters_obj), len(clusters_obj) + len(clusters_conn_1))
 
             # Bidirectional matrix
-            dist_obj1 = self.__OSRM_query(coords_obj1, sources=ins, destinations=outs)
-            dist_obj1 += self.__OSRM_query(
-                coords_obj1, sources=outs, destinations=ins
+            dist_obj1 = self.__osrm_query(coords_obj1, sources=ins, destinations=outs)
+            dist_obj1 += self.__osrm_query(
+                coords_obj1,
+                sources=outs,
+                destinations=ins,
             ).T
 
             if len(connections) == 2:
@@ -271,35 +323,36 @@ class linkageCut:
                 coords_obj2 = np.append(clusters_obj, clusters_conn_2, axis=0)
                 ins = range(len(clusters_obj))
                 outs = range(
-                    len(clusters_obj), len(clusters_obj) + len(clusters_conn_2)
+                    len(clusters_obj),
+                    len(clusters_obj) + len(clusters_conn_2),
                 )
 
                 # Bidirectional matrix
-                dist_obj2 = self.__OSRM_query(
-                    coords_obj2, sources=ins, destinations=outs
+                dist_obj2 = self.__osrm_query(
+                    coords_obj2,
+                    sources=ins,
+                    destinations=outs,
                 )
-                dist_obj2 += self.__OSRM_query(
-                    coords_obj2, sources=outs, destinations=ins
+                dist_obj2 += self.__osrm_query(
+                    coords_obj2,
+                    sources=outs,
+                    destinations=ins,
                 )
                 min_dist_indx_2 = np.unravel_index(
-                    np.argmin(dist_obj2), dist_obj2.shape
+                    np.argmin(dist_obj2),
+                    dist_obj2.shape,
                 )[0]
 
                 # Swaping places
-
                 ind_labels[[min_dist_indx_2, -1]] = ind_labels[[-1, min_dist_indx_2]]
-                clusters_obj[[min_dist_indx_2, -1]] = clusters_obj[
-                    [-1, min_dist_indx_2]
-                ]
+                clusters_obj[[min_dist_indx_2, -1]] = clusters_obj[[-1, min_dist_indx_2]]
 
             min_dist_indx_1 = np.unravel_index(np.argmin(dist_obj1), dist_obj1.shape)[0]
             # Swapping places
             ind_labels[[min_dist_indx_1, 0]] = ind_labels[[0, min_dist_indx_1]]
             clusters_obj[[min_dist_indx_1, 0]] = clusters_obj[[0, min_dist_indx_1]]
 
-        dist_matrix = self.__OSRM_query(clusters_obj)
-        dist_matrix += dist_matrix.T
-
+        dist_matrix = self.__osrm_query(clusters_obj)
         ind_labels += 10 * label  # Adding prefix to label
         if return_labels:
             return dist_matrix, ind_labels
@@ -328,7 +381,7 @@ def main(args):
         cluster = X[top_down[:, 0] == i]
         alpha = alpha_list[i - 1]
         hull = alphashape.alphashape(cluster, alpha)
-        if type(hull) == shapely.geometry.multipolygon.MultiPolygon:
+        if isinstance(hull, shapely.geometry.multipolygon.MultiPolygon):
             areas = [geom.area for geom in hull.geoms]
             # Select the component with larger area
             big = np.argmax(areas)
@@ -345,11 +398,15 @@ def main(args):
         edgecolors="black",
         color="red",
         linewidth=0.5,
-        label="level 0"
+        label="level 0",
     )
     centers = linkage_matrix.give_centers_level(1)
     plt.scatter(
-        *centers.T, marker="X", edgecolors="black", linewidth=0.5, label="level 1"
+        *centers.T,
+        marker="X",
+        edgecolors="black",
+        linewidth=0.5,
+        label="level 1",
     )
     fig.suptitle("Hierarchical division")
     plt.xlabel(r"lon (deg)")
@@ -359,9 +416,8 @@ def main(args):
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    import pandas as pd
     import os
+    import matplotlib.pyplot as plt
     import argparse
     import alphashape
     import shapely
