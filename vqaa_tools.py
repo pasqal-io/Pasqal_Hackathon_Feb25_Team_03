@@ -5,7 +5,7 @@ Tools to solve QUBO using an analog device and VQAA
 import numpy as np
 import matplotlib.pyplot as plt
 from pulser import Pulse, Sequence, Register
-from pulser_simulation import QutipEmulator
+from pulser_simulation import QutipBackend, SimConfig, QutipEmulator
 from pulser.devices import DigitalAnalogDevice
 from pulser.waveforms import InterpolatedWaveform, ConstantWaveform
 from scipy.optimize import minimize
@@ -121,10 +121,6 @@ def heuristical_embedding(V, P, Q):
     # Update the remaining atoms and positions
     V.remove(u)
     P.remove(center)
-
-    # Initialize the interactions matrix U
-    U = np.zeros((len(Q), len(Q)))
-
     while V:
         u = V[0]
         min_sum = float("inf")
@@ -135,7 +131,7 @@ def heuristical_embedding(V, P, Q):
                 v = atom_position[0] 
                 pv = atom_position[1]
 
-                sum += sum + np.abs(Q[u,v]-compute_element_U(np.vstack([p,pv])))
+                sum = sum + np.abs(Q[u,v]-compute_element_U(np.vstack([p,pv])))
                 
             # If we find the best position available so far
             if sum<min_sum:
@@ -175,10 +171,7 @@ def define_sequence_qaa(register, Q, omega, delta, T=4000, device = DigitalAnalo
     sequence.declare_channel("rydberg_global", "rydberg_global")
 
     node_weights = np.diag(Q)
-    try: 
-        norm_node_weights = node_weights/np.min(node_weights) # we use the min for normalisation since the diagonal values are negative
-    except:
-        print(node_weights)
+    norm_node_weights = node_weights/np.min(node_weights) # we use the min for normalisation since the diagonal values are negative
     det_map_weights = 1 - norm_node_weights
 
 
@@ -210,10 +203,16 @@ def define_sequence_qaa(register, Q, omega, delta, T=4000, device = DigitalAnalo
 
 def run_sequence(sequence, N=1000):
     """Runs the sequence and returns the count dictionary"""
-
-    simul = QutipEmulator.from_sequence(sequence)
+    simul = QutipEmulator.from_sequence(
+        sequence,
+        sampling_rate=0.05,
+        config=SimConfig(
+            runs=10,
+        ),
+        evaluation_times="Minimal",
+    )
     results = simul.run()
-    final = results.get_final_state()
+    # final = results.get_final_state()
     count_dict = results.sample_final_state(N_samples=N)
 
     return count_dict
@@ -230,7 +229,6 @@ def plot_distribution(C,N, best_solutions):
     plt.bar(C.keys(), C.values(), width=0.5, color=color_dict.values())
     plt.xticks(rotation="vertical")
     plt.show()
-
 
 
 def agg_cost(count_dict, Q):
@@ -274,12 +272,9 @@ def run_vqaa(Q, register):
         x0,
         args=[Q, register, Cs],
         method="Nelder-Mead",
-        tol=1e-6,
-        options={"maxiter": 3, "maxfev": 2} 
+        tol=1e-3,
+        options={"maxiter": 1, "maxfev": 1} 
     )
 
     x_opt = res.x
     return Cs[0], x_opt
-
-
-
