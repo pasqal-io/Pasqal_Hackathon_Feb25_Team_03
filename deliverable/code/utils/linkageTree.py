@@ -143,7 +143,7 @@ class linkageCut:
 
         return self.top_down
 
-    def give_center_label(self, label: int):
+    def give_center_label(self, label: int, scaled: bool = False):
         """
         Returns the positions in lon-lat space of the centers with a given label.
 
@@ -163,8 +163,10 @@ class linkageCut:
                 euclidean_distances(self.data[cluster_mask], center.reshape(1, -1)),
             )
         ]
-
-        return center
+        if scaled:
+            return center
+        else:
+            return self.scaler.inverse_transform(center.reshape(1, -1))
 
     def give_centers_level(self, level):
         """
@@ -184,7 +186,7 @@ class linkageCut:
                 centers = np.zeros((len(level_labels), 2))
 
                 for i in range(len(level_labels)):
-                    centers[i] = self.give_center_label(level_labels[i])
+                    centers[i] = self.give_center_label(level_labels[i], scaled=True)
 
                 centers = self.scaler.inverse_transform(centers)
             return centers
@@ -299,6 +301,8 @@ class linkageCut:
         """
 
         clusters_obj = self.give_centers_label_down(label)
+        # To add the parent cluster
+        # clusters_obj = np.vstack([clusters_obj, self.give_center_label(label)])
         ind_labels = np.array(range(1, len(clusters_obj) + 1))
 
         if len(connections) == 0:
