@@ -605,15 +605,11 @@ def count_most_violated_constraints(solutions_zipped, N, p, startNode, endNode, 
     return constraints
 
 
-def load_lambda_means(concrete_simulations):
+def load_lambda_means(files):
     """
     Carga los pesos lambda desde archivos, calcula su media y devuelve la lista de medias.
     """
-    files_to_find = f"./data/lamdasOptimized/{concrete_simulations}*"
-    files = glob.glob(files_to_find)
-
     all_weights = [np.loadtxt(file) for file in files]
-
     if not all_weights:
         return []  # Retorna lista vacía si no hay datos
 
