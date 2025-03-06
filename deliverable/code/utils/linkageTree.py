@@ -212,7 +212,7 @@ class linkageCut:
                 centers = np.zeros((self.nclusters, 2))
 
                 for i in range(len(level_labels)):
-                    centers[i] = self.give_center_label(level_labels[i])
+                    centers[i] = self.give_center_label(level_labels[i], scaled=True)
 
                 centers = self.scaler.inverse_transform(centers)
             return centers

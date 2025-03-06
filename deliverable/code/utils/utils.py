@@ -4,7 +4,7 @@ from collections.abc import Iterable
 
 import folium
 import numpy as np
-from linkageTree import linkageCut
+from utils.linkageTree import linkageCut
 
 
 def map_show_array(
