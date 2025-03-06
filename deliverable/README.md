@@ -1,6 +1,6 @@
 # Pasqal Challenge
 
-## Introduction 
+## Introduction
 We aim to solve the problem of creating M bus lines, each with P bus stops in a city with a total number of N stops. We consider the following:
 
 1. Distances are not symmetric (in general, $d(A,B) \neq d(B,A)$).
@@ -19,7 +19,7 @@ Where the value is 1 only if the line $l$ goes at some point from stop $i$ to st
     f(x_{00}^{0}, x_{01}^{0},...,x_{0N-1}^{0}, x_{10}^{0}, ..., x_{N-1N-1}^{0}, x_{00}^{1}, ..., x_{N-1N-1}^{L-1}) = \sum_{l}^{L-1}\sum_{i}^{N-1}\sum_{j}^{N-1}D_{ij}x_{ij}^{l}
 ```
 
-where the matrix of distances $D_{ij}$ is not symmetric and of order $N\times N$. The formulation of the optimization problem is based on the QUBO problem, i.e, minimizing 
+where the matrix of distances $D_{ij}$ is not symmetric and of order $N\times N$. The formulation of the optimization problem is based on the QUBO problem, i.e, minimizing
 
 ```math
 F_Q(z) = z^TQz
@@ -61,7 +61,7 @@ The cost function is then
     \sum_{k=0}^{p-1}\sum_{i=0}^{N-1}\sum_{j=0}^{N-1} (x_{Nk+i}\cdot x_{N(k+1)+j}D_{ij})
 ```
 
-The cost function in the $Q_matrix$ representation is just inserting the distances cost matrix $D$ into blocks $0;1$, $1;2$,...,$N-2;N-1$. For symmetric purposes, the cost $Q_matrix^{T}$ is also added. 
+The cost function in the $Q_matrix$ representation is just inserting the distances cost matrix $D$ into blocks $0;1$, $1;2$,...,$N-2;N-1$. For symmetric purposes, the cost $Q_matrix^{T}$ is also added.
 
 ### Conditions
 
