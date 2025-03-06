@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import argparse
+import os
+
 import overpy
 import pandas as pd
 
@@ -54,3 +57,27 @@ def fetch_amenities_from(query: str | None = None):
     # Formatted information into a DataFrame, only for convenience
     df.reset_index(inplace=True, drop=True)
     return df
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        prog="Overpy Amenities Manager",
+        description="Allows to download amenities from a specific city using overpy",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=os.path.join("amenities-granada2.csv"),
+    )
+    parser.add_argument(
+        "--query",
+        type=str,
+        default=os.path.join("overpy-query.txt"),
+    )
+    args = parser.parse_args()
+
+    with open(args.query) as file:
+        query = file.read()
+
+    df = fetch_amenities_from(query)
+    df.to_csv(args.output)

@@ -1,0 +1,8 @@
+[out:json];
+area[name=Granada][admin_level=8]->.granada;
+(
+node(area.granada)[amenity](37.120, -3.650, 37.300, -3.570);
+);
+out body;
+>;
+out skel qt;
