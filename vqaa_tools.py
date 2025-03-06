@@ -201,20 +201,21 @@ def define_sequence_qaa(register, Q, omega, delta, T=4000, device = DigitalAnalo
     return sequence
 
 
-def run_sequence(sequence, N=1000):
+def run_sequence(sequence, N=4000):
     """Runs the sequence and returns the count dictionary"""
     simul = QutipEmulator.from_sequence(
         sequence,
         sampling_rate=0.05,
         config=SimConfig(
-            runs=10,
+            runs=100,
+            samples_per_run=5
         ),
         evaluation_times="Minimal",
     )
     results = simul.run()
-    # final = results.get_final_state()
+    #final = results.get_final_state()
     count_dict = results.sample_final_state(N_samples=N)
-
+    
     return count_dict
 
 
@@ -238,7 +239,7 @@ def agg_cost(count_dict, Q):
         vector_key = np.array([int(bit) for bit in key]).reshape(-1, 1)
         cost += times*vector_key.T@Q@vector_key
     
-    return cost
+    return cost/sum(count_dict.values())
 
 
 def simple_quantum_loop(Q, register, parameters):
@@ -271,9 +272,9 @@ def run_vqaa(Q, register):
         func_simple,
         x0,
         args=[Q, register, Cs],
-        method="Nelder-Mead",
+        method="COBYLA",
         tol=1e-3,
-        options={"maxiter": 1, "maxfev": 1} 
+        options={"maxiter": 50, "maxfev": None} 
     )
 
     x_opt = res.x
