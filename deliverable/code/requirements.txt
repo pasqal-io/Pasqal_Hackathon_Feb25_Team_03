@@ -6,7 +6,7 @@ emu_sv==1.0.0
 folium==0.19.4
 matplotlib==3.10.1
 networkx==3.4.2
-numpy==2.2.3
+numpy==1.26.4
 pandas==2.2.3
 pulser==1.3.0
 pulser_core==1.3.0
