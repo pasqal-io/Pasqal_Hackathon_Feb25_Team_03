@@ -64,7 +64,13 @@ class linkageCut:
         """
         return (np.diff(np.sort(a, axis=axis), axis=axis) != 0).sum(axis=axis) + 1
 
-    def __recursive_down(self, nclusters: int, level: int, total_levels: int, mask: np.ndarray):
+    def __recursive_down(
+        self,
+        nclusters: int,
+        level: int,
+        total_levels: int,
+        mask: np.ndarray,
+    ):
         """
         Instantiates attributes for other methods by transversing the tree for total_levels and reading results
         :param nclusters: Amount of clusters per level
@@ -218,7 +224,12 @@ class linkageCut:
                 centers = self.scaler.inverse_transform(centers)
             return centers
 
-    def __osrm_query(self, coords: np.ndarray, sources: Iterable | None = None, destinations: Iterable | None = None):
+    def __osrm_query(
+        self,
+        coords: np.ndarray,
+        sources: Iterable | None = None,
+        destinations: Iterable | None = None,
+    ):
         """
         This functions calls osrm project to fetch the driving distance between stops
         :param coords: Coordenates of the clusters points (lon, lat)
@@ -271,9 +282,10 @@ class linkageCut:
             dist_matrix = self.dist_matrix[level]
         if return_labels:
             labels = [str(x) for x in np.arange(1, self.nclusters + 1)]
-
             if level > 0:
-                labels = sorted([int(x) for x in ["".join(x) for x in list(product(*[labels for _ in range(level)]))]])
+                labels = sorted(
+                    [int(x) for x in ["".join(x) for x in list(product(*[labels for _ in range(level + 1)]))]],
+                )
             return dist_matrix, labels
         else:
             return dist_matrix
@@ -306,11 +318,10 @@ class linkageCut:
         level = len(str(int(label))) - 1
 
         dist_matrix, labels = self.dist_matrix_level(level + 1)
+        labels = [str(x) for x in labels]
         # Get all clusters one level down from the given label, e.g, 1 -> 11, 12, 13,...
         # e.g, 11 -> 111, 112, ...
-        print(labels)
-        label_filter = np.asarray([str(x).startswith(str(label)) for x in labels])
-        print(label_filter)
+        label_filter = np.asarray([x.startswith(str(label)) for x in labels])
 
         if len(connections) != 0:
             indices = []
@@ -318,25 +329,24 @@ class linkageCut:
             symm_matrix += symm_matrix.T
 
             # Calculate the centers in normalized space and return to lon-lat
-            from_indexes = np.asarray([str(x).startswith(str(connections[0])) for x in labels])
-
-            dist_indx_1 = (label_filter) | (from_indexes)
-
+            from_indexes = np.asarray(
+                [x.startswith(str(connections[0])) for x in labels],
+            )
             min_dist_indx_1 = np.unravel_index(
-                np.argmin(symm_matrix[dist_indx_1, :][:, dist_indx_1]),
-                symm_matrix.shape,
+                np.argmin(symm_matrix[label_filter, :][:, from_indexes]),
+                symm_matrix[label_filter, :][:, from_indexes].shape,
             )[0]
             indices.append(min_dist_indx_1)
             if len(connections) == 2:
                 # Calculate the centers in normalized space and return to lon-lat
-                to_indexes = np.asarray([str(x).startswith(str(connections[1])) for x in labels])
-                dist_indx_1 = (label_filter) | (to_indexes)
+                to_indexes = np.asarray(
+                    [x.startswith(str(connections[1])) for x in labels],
+                )
                 min_dist_indx_2 = np.unravel_index(
-                    np.argmin(symm_matrix[dist_indx_2, :][:, dist_indx_2]),
-                    symm_matrix.shape,
+                    np.argmin(symm_matrix[label_filter, :][:, to_indexes]),
+                    symm_matrix[label_filter, :][:, to_indexes].shape,
                 )[0]
                 indices.append(min_dist_indx_2)
-
         dist_matrix = dist_matrix[label_filter, :][:, label_filter]
         if return_labels:
             ind_labels = np.array(range(1, len(dist_matrix) + 1))
