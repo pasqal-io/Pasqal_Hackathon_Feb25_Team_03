@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from itertools import product
 
 import numpy as np
 import pandas as pd
@@ -266,11 +267,12 @@ class linkageCut:
             if len(self.__dist_keys) > self.max_cache:
                 __oldest_level = self.dist_matrix.pop()
                 self.dist_matrix.pop(__oldest_level, None)
-            ind_labels = np.array(range(1, len(centers_obj) + 1))
         else:
             dist_matrix = self.dist_matrix[level]
         if return_labels:
-            return dist_matrix, ind_labels
+            labels = [str(x) for x in np.arange(1, self.nclusters + 1)]
+            labels = sorted([int(x) for x in ["".join(x) for x in list(product(*[labels for _ in range(level)]))]])
+            return dist_matrix, labels
         else:
             return dist_matrix
 
@@ -295,73 +297,50 @@ class linkageCut:
         >>> # To assign the closest nodes from 1 (11, 12, ...)
         >>> # To the connected nodes 2 and 3 (21,22,23... and 31,32,33...)
         >>> # As first and last stops to ensure a smooth 2-1-3 route.
-        >>> dist_array(1, connections = [2,3])
+        >>> dist_matrix_label_down(1, connections = [2,3])
 
         :return:
         """
+        level = len(str(int(label))) - 1
 
-        clusters_obj = self.give_centers_label_down(label)
-        # To add the parent cluster
-        # clusters_obj = np.vstack([clusters_obj, self.give_center_label(label)])
-        ind_labels = np.array(range(1, len(clusters_obj) + 1))
-
+        myself_indexes = self.top_down[:, level] == label
         if len(connections) == 0:
-            self.dist_matrix_level(label)
+            dist_matrix, labels = self.dist_matrix_level(level)
+            dist_matrix = dist_matrix[myself_indexes, :][:, myself_indexes]
         else:
-            clusters_conn_1 = self.give_centers_label_down(connections[0])
-            coords_obj1 = np.append(clusters_obj, clusters_conn_1, axis=0)
-            # NOTE: Maybe know that we cache stuff, we could fetch the information instantly if in already in memory?
-            ins = range(len(clusters_obj))
-            outs = range(len(clusters_obj), len(clusters_obj) + len(clusters_conn_1))
+            indices = []
+            dist_matrix, labels = self.dist_matrix_level(level)
+            symm_matrix = dist_matrix.copy()
+            symm_matrix += symm_matrix.T
 
-            # Bidirectional matrix
-            dist_obj1 = self.__osrm_query(coords_obj1, sources=ins, destinations=outs)
-            dist_obj1 += self.__osrm_query(
-                coords_obj1,
-                sources=outs,
-                destinations=ins,
-            ).T
+            # Calculate the centers in normalized space and return to lon-lat
+            from_indexes = self.top_down[:, level] == connections[0]
+            from_indexes
 
+            dist_indx_1 = np.concatenate([myself_indexes, from_indexes])
+
+            min_dist_indx_1 = np.unravel_index(
+                np.argmin(symm_matrix[dist_indx_1, :][:, dist_indx_1]),
+                symm_matrix.shape,
+            )[0]
+            indices.append(min_dist_indx_1)
             if len(connections) == 2:
-                clusters_conn_2 = self.give_centers_label_down(connections[0])
-                coords_obj2 = np.append(clusters_obj, clusters_conn_2, axis=0)
-                ins = range(len(clusters_obj))
-                outs = range(
-                    len(clusters_obj),
-                    len(clusters_obj) + len(clusters_conn_2),
-                )
-
-                # Bidirectional matrix
-                dist_obj2 = self.__osrm_query(
-                    coords_obj2,
-                    sources=ins,
-                    destinations=outs,
-                )
-                dist_obj2 += self.__osrm_query(
-                    coords_obj2,
-                    sources=outs,
-                    destinations=ins,
-                )
+                # Calculate the centers in normalized space and return to lon-lat
+                to_indexes = self.top_down[:, level] == connections[1]
+                dist_indx_2 = np.concatenate([myself_indexes, to_indexes])
                 min_dist_indx_2 = np.unravel_index(
-                    np.argmin(dist_obj2),
-                    dist_obj2.shape,
+                    np.argmin(symm_matrix[dist_indx_2, :][:, dist_indx_2]),
+                    symm_matrix.shape,
                 )[0]
+                indices.append(min_dist_indx_2)
 
-                # Swaping places
-                ind_labels[[min_dist_indx_2, -1]] = ind_labels[[-1, min_dist_indx_2]]
-                clusters_obj[[min_dist_indx_2, -1]] = clusters_obj[[-1, min_dist_indx_2]]
-
-            min_dist_indx_1 = np.unravel_index(np.argmin(dist_obj1), dist_obj1.shape)[0]
-            # Swapping places
-            ind_labels[[min_dist_indx_1, 0]] = ind_labels[[0, min_dist_indx_1]]
-            clusters_obj[[min_dist_indx_1, 0]] = clusters_obj[[0, min_dist_indx_1]]
-
-        dist_matrix = self.__osrm_query(clusters_obj)
-        ind_labels += 10 * label  # Adding prefix to label
+        dist_matrix = dist_matrix[myself_indexes, :][:, myself_indexes]
         if return_labels:
-            return dist_matrix, ind_labels
+            ind_labels = np.array(range(1, len(dist_matrix) + 1))
+            ind_labels += 10 * label  # Adding prefix to label
+            return dist_matrix, indices, ind_labels
         else:
-            return dist_matrix
+            return dist_matrix, indices
 
 
 def main(args):
