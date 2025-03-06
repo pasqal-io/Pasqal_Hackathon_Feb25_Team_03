@@ -13,6 +13,22 @@ from scipy.spatial.distance import pdist, squareform
 import pandas as pd
 import itertools
 
+from emu_sv import (
+    SVBackend, 
+    StateResult, 
+    SVConfig, 
+    QubitDensity
+)
+from emu_mps import (
+    MPS,
+    MPSConfig,
+    MPSBackend,
+    BitStrings,
+    Fidelity,
+    QubitDensity,
+)
+
+
 
 def evaluate_mapping(new_coords, Q):
     """Cost function to minimize. Ideally, the pairwise distances are conserved."""
@@ -23,6 +39,13 @@ def evaluate_mapping(new_coords, Q):
     )
     return np.linalg.norm(new_Q - Q)
 
+def evaluate_mapping_with_factor(factor, *args):
+    """Cost function to minimize playing with a multiplicative factor"""
+    Q = args[0][0]
+    Q = factor*Q
+    new_Q = compute_U(minimization_embedding(Q))
+
+    return frobenius_similarity(new_Q,Q)
 
 def biggest_difference(new_Q, Q):
     """Computes the biggest elementwise relative difference between two matrices"""
@@ -218,6 +241,43 @@ def run_sequence(sequence, N=4000):
     
     return count_dict
 
+def run_sequence_emusv(sequence, N=4000):
+    """Runs the sequence in emu-sv emulator"""
+    bknd = SVBackend()
+    dt = 10  # timestep in ns
+
+    seq_duration = sequence.get_duration()
+
+    state = StateResult(evaluation_times=[seq_duration])
+
+    config = SVConfig(dt=dt, observables = [state], log_level=2000)
+
+    results = bknd.run(sequence, config)
+
+    final_state = results["state"][seq_duration]
+
+    return final_state.sample(N)
+
+def run_sequence_emumps(sequence, N=4000, dt=100):
+    """Runs the sequence in emu-sv emulator"""
+
+    final_time = (
+        sequence.get_duration() // dt * dt
+    )  # final_time should be a multiple of dt, and not exceed the sequence duration
+    eval_times = [final_time]
+
+    bitstrings = BitStrings(evaluation_times=eval_times, num_shots=N)
+
+    mpsconfig = MPSConfig(
+    dt=dt,
+    observables=[bitstrings]
+    )
+
+    simul = MPSBackend()
+    results = simul.run(sequence, mpsconfig)
+
+    return results[bitstrings.name][final_time]
+
 
 def plot_distribution(C,N, best_solutions):
     """Plots the distribution for the sampled bitstrings"""
@@ -242,7 +302,7 @@ def agg_cost(count_dict, Q):
     return cost/sum(count_dict.values())
 
 
-def simple_quantum_loop(Q, register, parameters):
+def simple_quantum_loop(Q, register, parameters, emulator):
     """Loop to run the whole process of QAA"""
     params = np.array(parameters)
     print(params)
@@ -250,7 +310,12 @@ def simple_quantum_loop(Q, register, parameters):
     parameter_detuning = params[1]
     seq = define_sequence_qaa(register, Q, parameter_omega, parameter_detuning)
 
-    counts = run_sequence(seq)
+    if emulator == "qutip":
+        counts = run_sequence(seq)
+    elif emulator == "mps":
+        counts = run_sequence_emumps(seq)
+    elif emulator == "sv":
+        counts = run_sequence_emusv(seq)
 
     return counts
 
@@ -259,19 +324,20 @@ def func_simple(parameters, *args):
     Q = args[0][0]
     register = args[0][1]
     Cs = args[0][2]
-    C = simple_quantum_loop(Q, register, parameters)
+    emulator = args[0][3]
+    C = simple_quantum_loop(Q, register, parameters, emulator)
     Cs[0] = C
     cost = agg_cost(C, Q)
     return cost
 
-def run_vqaa(Q, register):
+def run_vqaa(Q, register, emulator):
     """Run the VQAA and return the optimal solutions"""
     x0 = np.random.uniform(0, 10, 2)
     Cs = [-1]
     res = minimize(
         func_simple,
         x0,
-        args=[Q, register, Cs],
+        args=[Q, register, Cs, emulator],
         method="COBYLA",
         tol=1e-3,
         options={"maxiter": 50, "maxfev": None} 
