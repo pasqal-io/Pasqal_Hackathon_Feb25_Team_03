@@ -536,6 +536,44 @@ def load_lambda_means(files):
 
     return np.mean(all_weights, axis=0).tolist()
 
+def compute_general_lambdas(distances, max_N, iterations=5, initial_factor=0.01):
+    """
+    Compute the general lambdas for a given distances matrix and a maximum number of stops.
+    It uses the optimize_lambdas methods iteratively for all the possible number of stops.
+    Then, for each lambda, it computes the maximum value for the all computed optimal lambdas.
+
+    Parameters
+    ----------
+    distances : np.array
+        Matrix with the distances between the stops. Is has shape at least as (max_N,max_N).
+    max_N : int 
+        Maximum number of stops.
+    iterations : int
+        Number of iterations for the optimization.
+    initial_factor : float
+        Initial factor for the lambdas.
+    
+    Returns
+    -------
+    max_lambdas : np.array
+        Array with the maximum values for the lambdas.
+    """
+    
+    all_lambdas = []
+    for n in range(2, max_N+1):
+        for p in range(1,n):
+            all_start_end_combinations = generate_all_start_end_combinations(n, L=1)
+            distances_N_stops_normalized = distances[:n,:n]/np.max(distances[:n,:n])
+            for startNode, endNode in all_start_end_combinations:
+                _,optimized_lambdas, combinations_zipped= optimize_lambdas(distances_N_stops_normalized, p, startNode, endNode, iterations=iterations, factor_over_upper_bound=initial_factor, best_solution_number=30)
+                minimal_solution = np.array(list(combinations_zipped[0][0]), dtype=int)
+                if check_solution_return(minimal_solution, n, p, startNode, endNode):
+                    all_lambdas.append(optimized_lambdas)
+    
+    all_lambdas = np.array(all_lambdas)
+    max_lambdas = np.max(all_lambdas, axis=0)
+    return max_lambdas
+
 
 def show_statistics_lambdas(solutions_analysis_array):
     """
