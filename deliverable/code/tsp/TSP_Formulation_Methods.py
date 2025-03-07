@@ -451,7 +451,7 @@ def calculate_upper_bound_distances(distances, p):
     return maxArray.T @ distances_QUBO_t @ maxArray
 
 
-def optimize_lambdas(distances, p, startNode, endNode, iterations=10, best_solution_number=30):
+def optimize_lambdas(distances, p, startNode, endNode, iterations=10, best_solution_number=30, factor_over_upper_bound=0.01):
     """
     For a given distances matrix, given the number of travels p, the start stop and the end stop,
     it optimizes the lambdas. The algotithm starts with an stimated lambdas, computes the QUBO
@@ -484,7 +484,7 @@ def optimize_lambdas(distances, p, startNode, endNode, iterations=10, best_solut
         List with the bitstrings, costs and distances of all combinations.
     """
 
-    initial_lambdas = np.array([0.01 * calculate_upper_bound_distances(distances, p) for i in range(5)])
+    initial_lambdas = np.array([factor_over_upper_bound * calculate_upper_bound_distances(distances, p) for i in range(5)])
     for i in range(iterations):
         Q, lambdas = create_QUBO_matrix(distances, p, startNode, endNode, initial_lambdas)
         solutions_zipped = brute_force_finding(Q, distances, p)
@@ -574,6 +574,19 @@ def compute_general_lambdas(distances, max_N, iterations=5, initial_factor=0.01)
     max_lambdas = np.max(all_lambdas, axis=0)
     return max_lambdas
 
+def compute_general_lambdas_for_specific_nodes(distances, max_N, startNodes, endNodes, iterations=5, initial_factor=0.01):
+
+    all_lambdas = []
+    for n in range(2, max_N+1):
+        for p in range(2, n):
+            for startNode, endNode in zip(startNodes, endNodes):
+                distances_N_stops_normalized = distances[:n,:n]/np.max(distances[:n,:n])
+                _,optimized_lambdas, combinations_zipped= optimize_lambdas(distances_N_stops_normalized, p, startNode, endNode, iterations=iterations, factor_over_upper_bound=initial_factor, best_solution_number=30)
+                minimal_solution = np.array(list(combinations_zipped[0][0]), dtype=int)
+                if check_solution_return(minimal_solution, n, p, startNode, endNode):
+                    all_lambdas.append(optimized_lambdas)
+
+    all_lambdas = np.array(all_lambdas)
 
 def show_statistics_lambdas(solutions_analysis_array):
     """
