@@ -25,7 +25,7 @@ def map_show_array(
     """
     # Create a map centered on loc_coords [latitude, longitude]
     if not map:
-        map = folium.Map(location=map_coords, zoom_start=12)
+        map = folium.Map(location=map_coords, zoom_start=13)
 
     # Loop through the data and add markers for each location
     for i in range(len(data)):
@@ -42,7 +42,7 @@ def map_draw_line(
     line: np.ndarray,
     color: str = "red",
     map: folium.Map | None = None,
-    zoom_start: int = 8,
+    zoom_start: int = 13,
     **map_kwargs,
 ):
     """
@@ -146,3 +146,20 @@ def convert_bitstring_to_matrix(
                 if bitstring[i + N * k] == 1 and bitstring[j + N * (k + 1)] == 1:
                     adjacency[i, j] = 1
     return adjacency
+
+def assemble_line(bitstrings, connections, nclusters, p):
+    ''' Give all orderd bitstrings and return the fully assembled adjacency matrix
+    
+    WIP: Currently there is only support for two levels!!
+    
+    :return: full line adjacency matrix
+    '''
+    adj_size = int(nclusters*nclusters)
+    adj_matrix = np.zeros((adj_size, adj_size))
+    
+    # get all connections between clusters
+    for i in range(nclusters):
+        adj_matrix[i*nclusters: (i+1)*nclusters, i*nclusters: (i+1)*nclusters] = convert_bitstring_to_matrix(bitstrings[i], N=nclusters, p=p)
+    
+    return adj_matrix
+    
