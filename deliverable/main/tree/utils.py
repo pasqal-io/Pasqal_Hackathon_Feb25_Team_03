@@ -6,6 +6,8 @@ import folium
 import numpy as np
 
 from .linkageTree import linkageCut
+import glob
+import os
 
 
 def map_show_array(
@@ -183,6 +185,8 @@ def assemble_line(level0_sols, level1_sols, nclusters, p):
 
     # Now connect them all. Let's retrieve first the ordering of bus stops.
     level0_order = np.nonzero(level0_sols.reshape(p + 1, nclusters))[1] + 1
+    
+    print(level0_order)
 
     # Do the first connection outside because its a special case where the actual 'end node' is in the position of start
     first_stop = level0_order[0]

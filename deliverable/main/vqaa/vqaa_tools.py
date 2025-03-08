@@ -302,7 +302,7 @@ def agg_cost(count_dict, Q):
 def simple_quantum_loop(Q, register, parameters, emulator):
     """Loop to run the whole process of QAA"""
     params = np.array(parameters)
-    print(params)
+    print('Variational in progress', params)
     parameter_omega = params[0]
     parameter_detuning = params[1]
     seq = define_sequence_qaa(register, Q, parameter_omega, parameter_detuning)
@@ -330,6 +330,8 @@ def run_vqaa(Q, register, emulator):
     """Run the VQAA and return the optimal solutions"""
     x0 = np.random.uniform(0, 10, 2)
     Cs = [-1]
+    
+    bounds = ((1, None), (1, None))
     res = minimize(
         func_simple,
         x0,
@@ -337,6 +339,7 @@ def run_vqaa(Q, register, emulator):
         method="COBYLA",
         tol=1e-3,
         options={"maxiter": 5},
+        bounds=bounds
     )
 
     x_opt = res.x
