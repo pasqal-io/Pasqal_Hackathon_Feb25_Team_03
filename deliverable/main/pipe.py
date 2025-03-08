@@ -9,6 +9,7 @@ from .tsp.TSP_Formulation_Methods import calculate_distances_cost_of_bidireccion
 from .tsp.TSP_Formulation_Methods import check_solution_return
 from .tsp.TSP_Formulation_Methods import compute_general_lambdas
 from .tsp.TSP_Formulation_Methods import create_QUBO_matrix
+from .tsp.TSP_Formulation_Methods import solve_qubo_with_Dwave
 from .vqaa.vqaa_tools import atoms_list
 from .vqaa.vqaa_tools import atoms_register
 from .vqaa.vqaa_tools import generate_grid
@@ -59,6 +60,7 @@ def execute_step(
     emulator: str = "sv",
     nchecks: int = 500,
     level: int = 0,
+    classical: bool = False,
 ):
     """
     Executes a single step of the algorithm given the input parameters
@@ -80,28 +82,33 @@ def execute_step(
         endNode - 1,
         lambdas,
     )
-    # Creating register and solving VQAA
-    coords = heuristical_embedding(
-        atoms_list(len(Q_matrix_initial)),
-        generate_grid(50, 50, 1),
-        Q_matrix_initial,
-    )
-    register = atoms_register(coords, show=False)
-    # Emulator options: "qutip" (pulser), "mps", and "sv"
-    print(f"----- Solving level {level} ------\n")
-    C_0, _ = run_vqaa(Q_matrix_initial, register, emulator)
-    number_props = min(int(len(C_0.keys())), nchecks)
-    C_ = dict(sorted(C_0.items(), key=lambda item: item[1], reverse=True))
-    proposed_sols = np.array(list(C_.keys()))[:number_props]
-    level = get_best_solution(
-        proposed_sols,
-        N,
-        p,
-        reduced_distances,
-        startNode,
-        endNode,
-    )  # symmetric matrix means that we are counting distances twice
-    level = np.array(string_to_bitstring(level))
+
+    if not classical:
+        # Creating register and solving VQAA
+        coords = heuristical_embedding(
+            atoms_list(len(Q_matrix_initial)),
+            generate_grid(50, 50, 1),
+            Q_matrix_initial,
+        )
+        register = atoms_register(coords, show=False)
+        # Emulator options: "qutip" (pulser), "mps", and "sv"
+        print(f"----- Solving level {level} ------\n")
+        C_0, _ = run_vqaa(Q_matrix_initial, register, emulator)
+        number_props = min(int(len(C_0.keys())), nchecks)
+        C_ = dict(sorted(C_0.items(), key=lambda item: item[1], reverse=True))
+        proposed_sols = np.array(list(C_.keys()))[:number_props]
+        level = get_best_solution(
+            proposed_sols,
+            N,
+            p,
+            reduced_distances,
+            startNode,
+            endNode,
+        )  # symmetric matrix means that we are counting distances twice
+        level = np.array(string_to_bitstring(level))
+    else:
+        level,_ = solve_qubo_with_Dwave(Q_matrix_initial, num_reads=1000)
+    
     return level
 
 
@@ -113,6 +120,7 @@ def give_line(
     endNode,
     emulator,
     nchecks: int = 1024,
+    classical: bool = False,
 ):
     """
     Executes the whole pipeline and outputs the results
@@ -157,6 +165,7 @@ def give_line(
         emulator,
         nchecks,
         level=0,
+        classical=classical
     )
     adjacency = convert_bitstring_to_matrix(level0, N=N, p=p)
 
@@ -200,6 +209,7 @@ def give_line(
                 emulator,
                 nchecks,
                 level=i,
+                classical=classical
             )
             level1[i] = [sol, closest]
         else:
