@@ -433,7 +433,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data",
         type=str,
-        default=os.path.join(os.pardir, "data", "amenities-granada.csv"),
+        default=os.path.join("data", "amenities-granada.csv"),
     )
     parser.add_argument("--nclusters", type=int, default=6)
     parser.add_argument("--levels", type=int, default=2)
