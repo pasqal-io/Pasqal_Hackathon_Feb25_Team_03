@@ -1,6 +1,6 @@
 <h1 align="center"> Connected Cities </h1>
-<h3 align="center">  City Planning in the Connected Era</h4>
-<h4 align="center"> Pasqal Challenge </h5>
+<h3 align="center">  City Planning in the Connected Era</h3>
+<h4 align="center"> Pasqal Challenge </h4>
 
 <img style="padding-bottom:2em;max-width:50%;height:auto;display:block;margin-left:auto;margin-right:auto" alt="Hierarchical Cluster visualization with default values" src="imgs/example.png"/>
 
