@@ -59,6 +59,7 @@ class linkageCut:
     def __nunique(self, a: np.ndarray, axis: int):
         """
         Count the number of unique elements in an array and axis
+
         :param a: array of values
         :param axis: axis of unique values
         """
@@ -73,6 +74,7 @@ class linkageCut:
     ):
         """
         Instantiates attributes for other methods by transversing the tree for total_levels and reading results
+
         :param nclusters: Amount of clusters per level
         :param levels: Actual level of the the recursive function
         :param total_levels: Number of levels to tranverse
@@ -178,6 +180,7 @@ class linkageCut:
     def give_centers_level(self, level):
         """
         Return the possible location closer to the cluster centroid in a certain level
+
         :param level: Level of the hierarchy with points
         """
 
@@ -232,6 +235,7 @@ class linkageCut:
     ):
         """
         This functions calls osrm project to fetch the driving distance between stops
+
         :param coords: Coordenates of the clusters points (lon, lat)
         :param sources: Index of sources
         :param destinations: Index of destinations
@@ -267,6 +271,7 @@ class linkageCut:
     def dist_matrix_level(self, level, return_labels=True):
         """
         Returns the distance matrix for all center clusters in a given level
+
         :param level: Level of the hierarchy
         :param return_labels: Flag to return the dist_matrix and labels.
         """

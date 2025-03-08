@@ -18,6 +18,7 @@ def map_show_array(
     """
     Uses folium library to draw a map in a specific coordenate (loc_coords, [latitude, longitude]).
     Draws specifics points given by data with their specific labels
+
     :param data: Iterable with N points with latitude, longitude.
     :param labels: Iterable with N points labels.
     :param loc_coords: Location coordenates of the main map.
@@ -48,6 +49,7 @@ def map_draw_line(
 ):
     """
     Draws a list of centroids in a map and add lines between them given an adjacency matrix.
+
     :param centers: List of centroids (lat, lon)
     :params line: Adjacency matrix
     :params color: Folium color. Defaults to 'red'
@@ -77,6 +79,7 @@ def map_draw_line(
 def draw_centers_on_map(centers: np.ndarray, **kwargs):
     """
     Auxiliar function that calculates map_coords, labels and returns a map_show_array
+
     :param centers: List of N points (lat, lon)
     :returns: folium.Map
     """
@@ -94,6 +97,7 @@ def view_linkage_on_map(
 ):
     """
     Given a hierarchical cluster from our linkageCut class, draws N levels using different colors
+
     :param linkage_matrix: LinkageCut class with hierarchical class clustering
     :param levels: Number of levels to draw.
     :param colors: List of colors for each level.
@@ -137,6 +141,7 @@ def convert_bitstring_to_matrix(
 ):
     """
     Given a dWave solution bitstring for the travelman sales problem (TSP), returns a adjacency matrix.
+
     :param bitstring: String with the solution using TSP format
     :param N: Number of nodes
     :param p: Number of expected stops.

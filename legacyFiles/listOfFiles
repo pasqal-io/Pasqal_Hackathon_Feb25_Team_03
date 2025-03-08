@@ -1,9 +1,0 @@
-- busLinesQUBOMethods.py -> methods for solving the original QUBO (binary variables with 3 indices) using dadk (privative software)
-- QUBOSolver.ipynb -> Execution of the methods from busLinesQUBOMethods.py
-- busLinesSolver.py -> Class for solving the QUBO in the new formulation but with older, non-symmetric, restrictions in PyQUBO
-- busLinesProblem.ipynb -> Notebook to execute busLinesSolver.py
-- graph_checking.ipynb -> Notebook for check a graph with older constraints
-- TSP_QUBO_Methods.py -> Methods for solving the QUBO problem using the formulation of the Traveling Salesman Problem. It works but, for cleaning reasons is stored here
-- TSP_QUBO_Solver.ipynb -> Use of methods for solving the QUBO problem using the TSP. Same as the one above.
-- TSP_MultiAgent_QUBO_Methods.py -> Methods for the attempt to solve the problem for several lines at the same tame. Not functional
-- TSP_MultiAgnent_QUBO_Solver.ipynv -> Use of methods. Not functional

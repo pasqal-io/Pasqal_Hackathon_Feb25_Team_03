@@ -125,11 +125,9 @@ def heuristical_embedding(V, P, Q):
     """
     Register Embedding Algorithm (arxiv.org/pdf/2402.05748)
 
-    V : set of atoms [0, ..., N-1]
-
-    P : set of positions (grid of positions)
-
-    Q : QUBO matrix
+    :param V: set of atoms [0, ..., N-1]
+    :param P: set of positions (grid of positions)
+    :param Q: QUBO matrix
     """
     Pa = []  # list of already assigned positions
 
