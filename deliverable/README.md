@@ -1,3 +1,35 @@
+<h1 align="center"> Connected Cities </h1>
+<h3 align="center">  City Planning in the Connected Era</h4>
+<h4 align="center"> Pasqal Challenge </h5>
+
+<img style="padding-bottom:2em;max-width:50%;height:auto;display:block;margin-left:auto;margin-right:auto" alt="Hierarchical Cluster visualization with default values" src="imgs/example.png"/>
+
+
+<div>
+<font size="4">
+<emph><strong>Authors</strong></emph>: Víctor Bayona Marchal, Jose Manuel Montes Armenteros, Yllari González Koda and Brian Sena Simons
+</font>
+</div>
+
+
+# Table of contents
+1. [Pasqal Challenge](#pasqal-Challenge)
+   1. [Introduction](#introduction)
+   2. [QUBO problem: iteration 1](#qubo-problem-iteration-1)
+       1. [Conditions](#conditions-iteration-1)
+   3. [QUBO problem: iteration 2](#qubo-problem-iteration-2)
+       1. [Conditions](#conditions-iteration-2)
+   4. [Optimizations of weights](#optimization-of-weights)
+   5. [Multi-route implementation](#multi-route-implementation)
+2. [Setup and Requirements](#setup-and-requirements)
+    1. [Structure](#structure)
+    2. [Requirements](#setup)
+        1. [Linux](#linux)
+        2. [Windows](#windows)
+    3. [How-to](#how-to)
+        1. [Visualize hierarchical cluster](#visualize-the-hierarchical-clustering-algorithm)
+        2. [Download amenities from a city](#download-amenities-from-a-city)
+
 # Pasqal Challenge
 
 ## Introduction
@@ -40,7 +72,7 @@ The objective is to find a valid bus route for a single bus line with an initial
 
 With that, we only need the following conditions.
 
-### Conditions
+### Conditions: iteration 1
 Every condition is weighted according to its importance.
 
 1. Every bus route has a lenght of $p+1$ stops (or $p$ connections): $\sum_{k=0}^{R-1} y_{k} = p $.
@@ -63,7 +95,7 @@ The cost function is then
 
 The cost function in the $Q_matrix$ representation is just inserting the distances cost matrix $D$ into blocks $0;1$, $1;2$,...,$N-2;N-1$. For symmetric purposes, the cost $Q_matrix^{T}$ is also added.
 
-### Conditions
+### Conditions: iteration 2
 
 Every condition has a weight which is aimed to be optimized.
 
@@ -73,7 +105,7 @@ Every condition has a weight which is aimed to be optimized.
 4. Start node is negatively penalized: $-\lambda_4 x_{0+i}$
 5. End node is negatively penalized: $-\lambda_5 x_{Np+j}$
 
-### Optimization of weights (lambda parameters)
+### Optimization of weights
 
 Some strategies for choosing the most suitable lambda parameters are followed. The first one is to fix all penalties to the maximum distance in the distances matrix.
 
@@ -81,13 +113,69 @@ Some strategies for choosing the most suitable lambda parameters are followed. T
 
 An approach for finding new routes for the same stops which connect all the stops could be to select the new start and end nodes as well as eliminate the previous formed line's start and end nodes. Therefore, we allow for crossing lines but without starting or ending in the same nodes.
 
+# Setup and Requirements
+## Structure
+```bash
+├── data
+│   ├── amenities-granada.csv
+│   ├── overpy-granada-query.txt
+│   └── utils.py
+├── docs
+│   └── pasqal.pdf
+├── main
+│   ├── tree
+│   │   ├── linkageTree.py
+│   │   └── utils.py
+│   ├── tsp
+│   │   └── TSP_Formulation_Methods.py
+│   └── vqaa
+│       └── vqaa_tools.py
+├── POC.ipynb
+├── README.md
+├── requirements.txt
+└── results
+```
+Regarding the directories, they are organized as follows:
+- `docs`: Contains documentation about the project development and formulation.
+- `data`: Contains the main python scripts that are related to data fetching and preprocessing.
+- `main`: Contains the main python scripts to run the experiments.
+    - `tree`: Contains the hierarchical clustering algorithm, `linkageTree` and visualization techniques `utils`.
+    - `tsp`: Contains the adaptation of the travelman sales problem for bus line optimization.
+    - `vqaa`: Contains the algorithms related to the quantum algorithm.
+- `results`: Contains the result of the experiments.
 
-## Code Description
+Regarding the notebooks we have:
+- `POC.ipynb`: Jupyter Notebook with the minimal working example for iteractive visualization of the proposed project.
 
-- `get_bus_stops.ipynb`: Jupyter Notebook where we view and generate the amenities from a city. We can also visualize the result of QUBOSolver.
-- `PulserQUBOMethods`: Methods for creating the QUBO 1. described above, generate translations between $x_{ij}^{l}$ (adjacency matrix) and $y_{k}$ (QUBO) representations. It can also compute the solutions via brute force as well as draw the stops graphs (do not confuse with the nodes $y$ graph) from a given solution.
-- `pulserQUBO.py`: Jupyter Notebook for use the methods from PulserQUBOMethods for given parameters ($N$, $p$ and penalty weights). It produces a symmetric Q matrix which can be used for computing the optimization algorithm.
-- `analog_qaoa.ipynb`: Jupyter Notebook for the embedding of a symmetric $Q$ matrix into a geometrical structure. Solving the QUBO with Pulser.
-- `data/`: Where input files are stored.
-- `results/`: Where output files are stored.
-- `TSP_Formulation`: Methods for creating the QUBO 2. described above. It can generate the Q_matrix and try different strategies for optimizing lambdas and mixing routes. The solver by brute force and DWave annealer are available.
+
+## Requirements
+In order to run all the experiments make sure to install all the necessary libraries.
+We recommend creating an environment to avoid incompatibility with other already installed python libraries in your system.
+### Linux
+```python
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+### Windows
+```python
+python -m venv .venv
+.\venv\Scripts\activate.bat
+python -m pip install -r requirements.txt
+```
+## How-to
+### Visualize the hierarchical clustering algorithm.
+We can simply run the algorithm in the main package as follows
+```python
+python -m main.tree.linkageTree -data data/amenities-granada.csv
+```
+Remember to pass a valid csv with the format similar to `overpy` library.
+The output should be an image similar to the following:
+
+<img style="max-width:50%;height:auto;display:block;margin-left:auto;margin-right:auto" alt="Hierarchical Cluster visualization with default values" src="imgs/HierarchicalDivision.png"/>
+
+### Download amenities from a city.We can simply run the algorithm in the data package as follows
+```python
+python -m main.data.utils -output data/amenities-granada.csv -query data/overpy-granada-query.txt
+```
+We are using the `overpy` library to fetch the data. Therefore, the query file should follow overpy valid structure.

@@ -4,7 +4,8 @@ from collections.abc import Iterable
 
 import folium
 import numpy as np
-from utils.linkageTree import linkageCut
+
+from .linkageTree import linkageCut
 
 
 def map_show_array(
@@ -25,7 +26,7 @@ def map_show_array(
     """
     # Create a map centered on loc_coords [latitude, longitude]
     if not map:
-        map = folium.Map(location=map_coords, zoom_start=12)
+        map = folium.Map(location=map_coords, zoom_start=13)
 
     # Loop through the data and add markers for each location
     for i in range(len(data)):
@@ -42,7 +43,7 @@ def map_draw_line(
     line: np.ndarray,
     color: str = "red",
     map: folium.Map | None = None,
-    zoom_start: int = 8,
+    zoom_start: int = 13,
     **map_kwargs,
 ):
     """
@@ -58,8 +59,9 @@ def map_draw_line(
     if not map:
         map = folium.Map(location=map_coords, zoom_start=zoom_start, **map_kwargs)
     # Add all center points
-    for center in centers:
-        folium.Marker(center, icon=folium.Icon(color=color)).add_to(map)
+    labels = range(1, len(centers) + 1)
+    for i in range(len(centers)):
+        folium.Marker(centers[i], popup=labels[i], icon=folium.Icon(color=color)).add_to(map)
     # Get all connected positions from line adj matrix
     nonzero = np.nonzero(line)
     for i in range(len(nonzero[0])):
@@ -146,3 +148,50 @@ def convert_bitstring_to_matrix(
                 if bitstring[i + N * k] == 1 and bitstring[j + N * (k + 1)] == 1:
                     adjacency[i, j] = 1
     return adjacency
+
+
+def string_to_bitstring(string_sol):
+    """Changing the format from string to list of bits
+
+    >>> example: string_to_bitstring('01001') = [0 1 0 0 1]
+    """
+    return [int(x) for x in string_sol]
+
+
+def assemble_line(level0_sols, level1_sols, nclusters, p):
+    """Give a dictionary with {level-0 label:, connections, [startNode, endNode]}
+    and return the fully assembled adjacency matrix
+
+    WIP: Currently there is only support for two levels!!
+
+    :return: full line adjacency matrix
+    """
+    adj_size = int(nclusters * nclusters)
+    adj_matrix = np.zeros((adj_size, adj_size))
+
+    # build basic adj matrix without connections
+    for i in range(nclusters):
+        adj_matrix[
+            i * nclusters : (i + 1) * nclusters,
+            i * nclusters : (i + 1) * nclusters,
+        ] = convert_bitstring_to_matrix(level1_sols[i + 1][0], N=nclusters, p=p)
+
+    # Now connect them all. Let's retrieve first the ordering of bus stops.
+    level0_order = np.nonzero(level0_sols.reshape(p + 1, nclusters))[1] + 1
+
+    # Do the first connection outside because its a special case where the actual 'end node' is in the position of start
+    first_stop = level0_order[0]
+    second_stop = level0_order[1]
+    adj_matrix[
+        (first_stop - 1) * nclusters + level1_sols[first_stop][1][0] - 1,
+        (second_stop - 1) * nclusters + level1_sols[second_stop][1][0] - 1,
+    ] = 1
+
+    # this together with bus info is enough
+    for this_stop, next_stop in zip(level0_order[1:-1], level0_order[2:]):
+        adj_matrix[
+            (this_stop - 1) * nclusters + level1_sols[this_stop][1][1] - 1,
+            (next_stop - 1) * nclusters + level1_sols[next_stop][1][0] - 1,
+        ] = 1
+
+    return adj_matrix

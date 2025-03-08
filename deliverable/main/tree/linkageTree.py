@@ -323,29 +323,36 @@ class linkageCut:
         # e.g, 11 -> 111, 112, ...
         label_filter = np.asarray([x.startswith(str(label)) for x in labels])
 
+        indices = []
         if len(connections) != 0:
-            indices = []
             symm_matrix = dist_matrix.copy()
             symm_matrix += symm_matrix.T
 
-            # Calculate the centers in normalized space and return to lon-lat
             from_indexes = np.asarray(
                 [x.startswith(str(connections[0])) for x in labels],
             )
-            min_dist_indx_1 = np.unravel_index(
-                np.argmin(symm_matrix[label_filter, :][:, from_indexes]),
-                symm_matrix[label_filter, :][:, from_indexes].shape,
-            )[0]
+
+            # Finding corresponding closest cluster to connected upper level cluster subcluster
+            min_dist_indx_1 = (
+                np.unravel_index(
+                    np.argmin(symm_matrix[label_filter, :][:, from_indexes]),
+                    symm_matrix[label_filter, :][:, from_indexes].shape,
+                )[0]
+                + 1
+            )
             indices.append(min_dist_indx_1)
             if len(connections) == 2:
-                # Calculate the centers in normalized space and return to lon-lat
                 to_indexes = np.asarray(
                     [x.startswith(str(connections[1])) for x in labels],
                 )
-                min_dist_indx_2 = np.unravel_index(
+                min_dist_indx_list = np.unravel_index(
                     np.argmin(symm_matrix[label_filter, :][:, to_indexes]),
                     symm_matrix[label_filter, :][:, to_indexes].shape,
-                )[0]
+                )
+
+                min_dist_indx_2 = min_dist_indx_list[0] + 1
+                if min_dist_indx_2 == min_dist_indx_1:
+                    min_dist_indx_2 = min_dist_indx_list[1] + 1
                 indices.append(min_dist_indx_2)
         dist_matrix = dist_matrix[label_filter, :][:, label_filter]
         if return_labels:
@@ -426,7 +433,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data",
         type=str,
-        default=os.path.join(os.pardir, "data", "amenities-granada.csv"),
+        default=os.path.join("data", "amenities-granada.csv"),
     )
     parser.add_argument("--nclusters", type=int, default=6)
     parser.add_argument("--levels", type=int, default=2)

@@ -67,7 +67,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output",
         type=str,
-        default=os.path.join("amenities-granada2.csv"),
+        default=os.path.join("amenities-granada.csv"),
     )
     parser.add_argument(
         "--query",
