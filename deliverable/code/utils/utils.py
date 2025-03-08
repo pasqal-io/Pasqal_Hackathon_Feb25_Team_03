@@ -150,41 +150,47 @@ def convert_bitstring_to_matrix(
 
 
 def string_to_bitstring(string_sol):
-    ''' Changing the format from string to list of bits
-    
+    """Changing the format from string to list of bits
+
     >>> example: string_to_bitstring('01001') = [0 1 0 0 1]
-    '''
+    """
     return [int(x) for x in string_sol]
 
 
 def assemble_line(level0_sols, level1_sols, nclusters, p):
-    ''' Give a dictionary with {level-0 label:, connections, [startNode, endNode]}
+    """Give a dictionary with {level-0 label:, connections, [startNode, endNode]}
     and return the fully assembled adjacency matrix
-    
+
     WIP: Currently there is only support for two levels!!
-    
+
     :return: full line adjacency matrix
-    '''
-    adj_size = int(nclusters*nclusters)
+    """
+    adj_size = int(nclusters * nclusters)
     adj_matrix = np.zeros((adj_size, adj_size))
-    
+
     # build basic adj matrix without connections
     for i in range(nclusters):
-        adj_matrix[i*nclusters: (i+1)*nclusters, i*nclusters: (i+1)*nclusters] = convert_bitstring_to_matrix(level1_sols[i+1][0], N=nclusters, p=p)
-    
+        adj_matrix[
+            i * nclusters : (i + 1) * nclusters,
+            i * nclusters : (i + 1) * nclusters,
+        ] = convert_bitstring_to_matrix(level1_sols[i + 1][0], N=nclusters, p=p)
+
     # Now connect them all. Let's retrieve first the ordering of bus stops.
-    level0_order = np.nonzero(level0_sols.reshape(p+1, nclusters))[1] + 1
-    
+    level0_order = np.nonzero(level0_sols.reshape(p + 1, nclusters))[1] + 1
+
     # Do the first connection outside because its a special case where the actual 'end node' is in the position of start
     first_stop = level0_order[0]
     second_stop = level0_order[1]
-    adj_matrix[(first_stop - 1)*nclusters + level1_sols[first_stop][1][0] - 1, (second_stop - 1)*nclusters + level1_sols[second_stop][1][0] - 1 ] = 1
+    adj_matrix[
+        (first_stop - 1) * nclusters + level1_sols[first_stop][1][0] - 1,
+        (second_stop - 1) * nclusters + level1_sols[second_stop][1][0] - 1,
+    ] = 1
 
-    
     # this together with bus info is enough
     for this_stop, next_stop in zip(level0_order[1:-1], level0_order[2:]):
-        adj_matrix[(this_stop-1)*nclusters + level1_sols[this_stop][1][1] - 1, (next_stop - 1)*nclusters + level1_sols[next_stop][1][0] - 1 ] = 1
+        adj_matrix[
+            (this_stop - 1) * nclusters + level1_sols[this_stop][1][1] - 1,
+            (next_stop - 1) * nclusters + level1_sols[next_stop][1][0] - 1,
+        ] = 1
 
-    
     return adj_matrix
-    
