@@ -331,12 +331,15 @@ class linkageCut:
             from_indexes = np.asarray(
                 [x.startswith(str(connections[0])) for x in labels],
             )
-            
+
             # Finding corresponding closest cluster to connected upper level cluster subcluster
-            min_dist_indx_1 = np.unravel_index(
-                np.argmin(symm_matrix[label_filter, :][:, from_indexes]),
-                symm_matrix[label_filter, :][:, from_indexes].shape,
-            )[0] + 1
+            min_dist_indx_1 = (
+                np.unravel_index(
+                    np.argmin(symm_matrix[label_filter, :][:, from_indexes]),
+                    symm_matrix[label_filter, :][:, from_indexes].shape,
+                )[0]
+                + 1
+            )
             indices.append(min_dist_indx_1)
             if len(connections) == 2:
                 to_indexes = np.asarray(
@@ -346,7 +349,7 @@ class linkageCut:
                     np.argmin(symm_matrix[label_filter, :][:, to_indexes]),
                     symm_matrix[label_filter, :][:, to_indexes].shape,
                 )
-                
+
                 min_dist_indx_2 = min_dist_indx_list[0] + 1
                 if min_dist_indx_2 == min_dist_indx_1:
                     min_dist_indx_2 = min_dist_indx_list[1] + 1
