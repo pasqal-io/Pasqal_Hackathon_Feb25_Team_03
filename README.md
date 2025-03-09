@@ -59,33 +59,9 @@ F_Q(z) = z^TQz
 
 where $z$ is a n-dimensional column vector and $Q$ an $n\times n$ matrix. To translate the problem to a QUBO formulation, we need some conditions and the binary variables.
 
-## QUBO problem: iteration 1
+## QUBO problem:
 
-The objective is to find a valid bus route for a single bus line with an initial stop (stop 0) and a final stop (stop N-1). A further simplification is to consider symmetric distances ($D_{ij}^{'} = D_{ij} + D_{ji} \quad \text{for} \; i<j, \quad 0 \quad \text{otherwise}$). The relevant binary variables are then reduced to $R=N(N-1)/2$. We express them in the binary vector of $R$ components $y$, with the correspondence $\{i,j\}\rightarrow k$ given by
-
-```math
-     \{i,j\} \rightarrow k = S_{i}+(j-i-1) = \sum_{m=0}^{i-1}(N-1-m)+(j-i-1)
-```
-```math
-     k \rightarrow \{i,j\} \quad\text{such that} \quad S_{i}\leq k < S_{i+1} \quad \text{and} \quad j = i+1+k-S_i
-```
-
-With that, we only need the following conditions.
-
-### Conditions: iteration 1
-Every condition is weighted according to its importance.
-
-1. Every bus route has a lenght of $p+1$ stops (or $p$ connections): $\sum_{k=0}^{R-1} y_{k} = p $.
-2. Every bus stop which is not the start or the end of the route should have 0 or 2 connections: $d_{i} = \sum_{j<i} y_{\{j,i\}} + \sum_{k=i+1}^{N-1}y_{\{i,k\}} \in \{0,2\} \quad \forall i\in\{1,...,N-2\}$.
-3. The first stop (0) should have only one connection: $\sum_{j=1}^{N-1} y_{\{0,j\}} = 1$.
-4. The last stop (N-1) should have only one connection: $\sum_{i=0}^{N} y_{\{i,N-2\}} = 1$.
-
-With these conditions and appropiate weights, we should be able to generate a valid bus route. The conditions are also produced in a way that the final Q matrix is symmetric as needed by the geometrical embeding.
-
-
-## QUBO problem: iteration 2
-
-Using the formulation of the Traveling Salesman Problem, one line of a bus is implemented. An initial stop (i) and final stop (j) are selected, allowing for i=j and not necessarily being i=0, j=N-1. The route has p+1 stops. The distances remain asymmetric (but the routes can be understood to be bidirectional). The variables are now a total of $R=N(p+1)$ and are of the shape $(y_{0N+0}, ..., y_{0N+N-1}, y_{1N+0},...,y_{1N+N-1},... ,..., y_{pN+N-1})$. The encoding is now thought to be about time-steps. More information [here](https://github.com/microsoft/qio-samples/blob/danielstocker-slc-ship-loading/samples/traveling-salesperson/traveling-salesperson.ipynb).  In the proper Traveling Salesman formulation, the only difference is that $p=N$
+Using the formulation of the Traveling Salesman Problem, a single bus is implemented. An initial stop (i) and final stop (j) are selected, not necessarily being i=0, j=N-1. The route has p+1 stops. The distances remain asymmetric (but the routes will be understood to be bidirectional, therefore in this first implementation we symmetrized the distance cost matrix). The variables are now a total of $R=N(p+1)$ and are of the shape $(y_{0N+0}, ..., y_{0N+N-1}, y_{1N+0},...,y_{1N+N-1},... ,..., y_{pN+N-1})$. The encoding is now thought to be about time-steps. More information [here](https://github.com/microsoft/qio-samples/blob/danielstocker-slc-ship-loading/samples/traveling-salesperson/traveling-salesperson.ipynb).  In the proper Traveling Salesman formulation, the only difference is that $p=N$
 
 The cost function is then
 
@@ -101,13 +77,13 @@ Every condition has a weight which is aimed to be optimized.
 
 1. In each step the bus is in only one stop: $\sum_{k=0}^{p}\sum_{i=0}^{N-1}\sum_{j=0}^{N-1}(x_{i+Nk}x_{j+Nk})=0$ (In the reference this term is not symmetric as it takes only $i<j$. Here we consider the rest of the terms, which only adds more weight to the penalty).
 2. In each step, the bus should be somewhere: $(\sum_{k}^{N(p+1)-1}x_{k}-(p+1))^2$
-3. Just one visit to each node: $\sum_{k}^{N(p+1)-1}\sum_{f=k+N,step \;N}^{Np-1}x_{k}x_{f}=0$
+3. Just one visit to each node: $\sum_{k}^{N(p+1)-1}\sum_{f=k+N,step \;N}^{N(p+1)-1}x_{k}x_{f}=0$
 4. Start node is negatively penalized: $-\lambda_4 x_{0+i}$
 5. End node is negatively penalized: $-\lambda_5 x_{Np+j}$
 
 ### Optimization of weights
 
-Some strategies for choosing the most suitable lambda parameters are followed. The first one is to fix all penalties to the maximum distance in the distances matrix.
+Some strategies for choosing the most suitable lambda parameters are followed. The first one is to fix all penalties to be the Upper Bound of the cost matrix, that is, the cost of a solution with all binary variables with the value 1. An optimization algorithm is implemented to reduce the high value this term imply.
 
 ### Multi-route implementation
 
@@ -121,7 +97,6 @@ An approach for finding new routes for the same stops which connect all the stop
 │   ├── overpy-granada-query.txt
 │   └── utils.py
 ├── docs
-│   └── pasqal.pdf
 ├── main
 │   ├── tree
 │   │   ├── linkageTree.py
@@ -131,9 +106,13 @@ An approach for finding new routes for the same stops which connect all the stop
 │   └── vqaa
 │       └── vqaa_tools.py
 ├── POC.ipynb
+├── POC_classical.ipynb
 ├── README.md
 ├── requirements.txt
+├── legacy_files   
+│   └── ...
 └── results
+
 ```
 Regarding the directories, they are organized as follows:
 - `docs`: Contains documentation about the project development and formulation.
@@ -142,10 +121,12 @@ Regarding the directories, they are organized as follows:
     - `tree`: Contains the hierarchical clustering algorithm, `linkageTree` and visualization techniques `utils`.
     - `tsp`: Contains the adaptation of the travelman sales problem for bus line optimization.
     - `vqaa`: Contains the algorithms related to the quantum algorithm.
+- `legacy_files`: Contains older files used in the development of the project which are no longer needed.
 - `results`: Contains the result of the experiments.
 
 Regarding the notebooks we have:
 - `POC.ipynb`: Jupyter Notebook with the minimal working example for iteractive visualization of the proposed project.
+- `POC_classical.ipynb`: Jupyter Notebook with an extension of the minimal working example using only classical solvers for visualization of a complete solution.
 
 
 ## Requirements
