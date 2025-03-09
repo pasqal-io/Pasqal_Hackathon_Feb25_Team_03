@@ -350,14 +350,21 @@ class linkageCut:
                 to_indexes = np.asarray(
                     [x.startswith(str(connections[1])) for x in labels],
                 )
-                min_dist_indx_list = np.unravel_index(
+                min_dist_indx_pos = np.unravel_index(
                     np.argmin(symm_matrix[label_filter, :][:, to_indexes]),
                     symm_matrix[label_filter, :][:, to_indexes].shape,
                 )
-
-                min_dist_indx_2 = min_dist_indx_list[0] + 1
+                    
+                min_dist_indx_2 = min_dist_indx_pos[0] + 1
                 if min_dist_indx_2 == min_dist_indx_1:
-                    min_dist_indx_2 = min_dist_indx_list[1] + 1
+                    # ugly hotfix to get next lower distance
+                    
+                    small_matrix = symm_matrix[label_filter,:][:, to_indexes].copy()
+                    small_matrix[min_dist_indx_2 - 1] = np.max(symm_matrix) + 1
+                    min_dist_indx_2 = np.unravel_index(
+                        np.argmin(small_matrix),
+                        small_matrix.shape,
+                    )[0] + 1
                 indices.append(min_dist_indx_2)
         dist_matrix = dist_matrix[label_filter, :][:, label_filter]
         if return_labels:
