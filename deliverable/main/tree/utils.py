@@ -204,3 +204,12 @@ def assemble_line(level0_sols, level1_sols, nclusters, p):
         ] = 1
 
     return adj_matrix
+
+def check_stops_usage(adj_matrix):
+    """Check if all stops are being used in the adjacency matrix
+
+    :return: True if all stops are being used
+    """
+    nclusters = int(np.sqrt(adj_matrix.size))
+    stops = np.nonzero(adj_matrix)[0] % nclusters
+    return np.all(np.isin(np.arange(nclusters), stops))
