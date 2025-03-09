@@ -15,12 +15,11 @@
 # Table of contents
 1. [Pasqal Challenge](#pasqal-Challenge)
    1. [Introduction](#introduction)
-   2. [QUBO problem: iteration 1](#qubo-problem-iteration-1)
-       1. [Conditions](#conditions-iteration-1)
-   3. [QUBO problem: iteration 2](#qubo-problem-iteration-2)
-       1. [Conditions](#conditions-iteration-2)
-   4. [Optimizations of weights](#optimization-of-weights)
-   5. [Multi-route implementation](#multi-route-implementation)
+   2. [QUBO problem](#qubo-problem)
+       1. [Conditions](#conditions)
+   3. [Optimizations of weights](#optimization-of-weights)
+   4. [Multi-route implementation](#multi-route-implementation)
+   5. [VQAA: quantum component](#vqaa-quantum-component)
 2. [Setup and Requirements](#setup-and-requirements)
     1. [Structure](#structure)
     2. [Requirements](#setup)
@@ -69,7 +68,7 @@ The cost function is then
     \sum_{k=0}^{p-1}\sum_{i=0}^{N-1}\sum_{j=0}^{N-1} (x_{Nk+i}\cdot x_{N(k+1)+j}D_{ij})
 ```
 
-The cost function in the $Q_matrix$ representation is just inserting the distances cost matrix $D$ into blocks $0;1$, $1;2$,...,$N-2;N-1$. For symmetric purposes, the cost $Q_matrix^{T}$ is also added.
+The cost function in the $Q_matrix$ representation is just inserting the distances cost matrix $D$ into blocks $0;1$, $1;2$,...,$N-2;N-1$. For symmetric purposes, the cost $Q_{matrix}^{T}$ is also added.
 
 ### Conditions: iteration 2
 
@@ -89,29 +88,41 @@ Some strategies for choosing the most suitable lambda parameters are followed. T
 
 An approach for finding new routes for the same stops which connect all the stops could be to select the new start and end nodes as well as eliminate the previous formed line's start and end nodes. Therefore, we allow for crossing lines but without starting or ending in the same nodes.
 
+## VQAA: quantum component
+
+The quantum component deployed in this work is a Variational Quantum Adiabatic Algorithm (VQAA). The idea is to use the QUBO formulation of the problem to embed it into Pasqal’s neutral atoms Hamiltonian. Once a register is created, we define a proper sequence to be run. This sequence includes the adiabatic pulse (which depends mainly on two parameters, amplitude and detuning) and the detuning map modulator, whose value depends on the detuning. The sequence is then run, and the parameters are updated to minimise the average cost of the sampled solutions.
+
 # Setup and Requirements
 ## Structure
 ```bash
 ├── data
-│   ├── amenities-granada.csv
-│   ├── overpy-granada-query.txt
-│   └── utils.py
-├── docs
+│   ├── amenities-granada.csv
+│   ├── lamdasOptimized
+│   ├── matriz-rutas-granada
+│   ├── overpy-granada-query.txt
+│   ├── Q_matrix_optimal_N_5_p_2_startNode_2_endNode_4
+│   └── utils.py
+├── imgs
+│   ├── example.png
+│   └── HierarchicalDivision.png
+├── legacy_files
+│   ├── analog_qaoa.ipynb
+│   ├── data
+│   ├── pulserQUBO.ipynb
+│   ├── PulserQUBOMethods.py
+│   ├── results
+│   ├── TSP_QUBO_Solver.ipynb
+│   └── TSP_QUBO_Solver_MULTILINE.ipynb
 ├── main
-│   ├── tree
-│   │   ├── linkageTree.py
-│   │   └── utils.py
-│   ├── tsp
-│   │   └── TSP_Formulation_Methods.py
-│   └── vqaa
-│       └── vqaa_tools.py
-├── POC.ipynb
+│   ├── pipe.py
+│   ├── benchmark.ipynb
+│   ├── tree
+│   ├── tsp
+│   └── vqaa
 ├── POC_classical.ipynb
+├── POC.ipynb
 ├── README.md
-├── requirements.txt
-├── legacy_files   
-│   └── ...
-└── results
+└── requirements.txt
 
 ```
 Regarding the directories, they are organized as follows:
